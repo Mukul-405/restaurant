@@ -1,0 +1,43 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  WAITER
+  CASHIER
+  KITCHEN_STAFF
+  RECEPTIONIST
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  phoneNumber   String    @unique
+  passwordHash  String
+  role          Role      @default(WAITER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  refreshTokens RefreshToken[]
+
+  @@index([phoneNumber])
+}
+
+model RefreshToken {
+  id         String   @id @default(uuid())
+  token      String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
