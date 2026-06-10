@@ -99,7 +99,7 @@ export class MenuService {
     const categories = await menuRepository.getAllCategories();
     const items = await menuRepository.getAllMenuItems();
     
-    const mappedItems = items.map(item => ({
+    const mappedItems = items.map((item: any) => ({
       id: item.id,
       name: item.name,
       description: item.description,
