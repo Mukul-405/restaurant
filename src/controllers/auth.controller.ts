@@ -15,7 +15,15 @@ export class AuthController {
     try {
       const data = loginSchema.parse(req.body);
       const result = await authService.login(data.phoneNumber, data.password);
-      res.status(200).json(result);
+      
+      res.cookie('refreshToken', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000 // 1 day
+      });
+
+      res.status(200).json({ accessToken: result.accessToken, user: result.user });
     } catch (error) {
       if (error instanceof Error && error.message.includes('Invalid credentials')) {
         return res.status(401).json({ message: error.message });
@@ -26,12 +34,20 @@ export class AuthController {
 
   async refreshToken(req: Request, res: Response, next: NextFunction) {
     try {
-      const { token } = req.body;
+      const token = req.cookies?.refreshToken;
       if (!token) {
-        return res.status(400).json({ message: 'Refresh token is required' });
+        return res.status(401).json({ message: 'Refresh token is required' });
       }
       const result = await authService.refreshToken(token);
-      res.status(200).json(result);
+
+      res.cookie('refreshToken', result.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 24 * 60 * 60 * 1000 // 1 day
+      });
+
+      res.status(200).json({ accessToken: result.accessToken });
     } catch (error) {
       if (error instanceof Error && (error.message.includes('expired') || error.message.includes('not found'))) {
         return res.status(401).json({ message: error.message });
@@ -42,11 +58,15 @@ export class AuthController {
 
   async logout(req: Request, res: Response, next: NextFunction) {
     try {
-      const { token } = req.body;
-      if (!token) {
-        return res.status(400).json({ message: 'Refresh token is required' });
+      const token = req.cookies?.refreshToken;
+      if (token) {
+        await authService.logout(token);
       }
-      await authService.logout(token);
+      res.clearCookie('refreshToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+      });
       res.status(200).json({ message: 'Logged out successfully' });
     } catch (error) {
       next(error);

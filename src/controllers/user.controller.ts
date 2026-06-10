@@ -10,6 +10,10 @@ const createMemberSchema = z.object({
   role: z.enum(Object.values(Role) as [string, ...string[]]),
 });
 
+const resetPasswordSchema = z.object({
+  password: z.string().min(6),
+});
+
 export class UserController {
   async createMember(req: Request, res: Response, next: NextFunction) {
     try {
@@ -71,6 +75,20 @@ export class UserController {
       const users = await userService.getAllMembers();
       res.status(200).json(users);
     } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id as string;
+      const data = resetPasswordSchema.parse(req.body);
+      const result = await userService.resetPassword(id, data.password);
+      res.status(200).json(result);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('not found')) {
+        return res.status(404).json({ message: error.message });
+      }
       next(error);
     }
   }

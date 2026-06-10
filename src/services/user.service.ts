@@ -14,7 +14,7 @@ export class UserService {
 
     // Default password to '123456' if not provided
     const passwordHash = await hashPassword(data.password || '123456');
-    
+
     const user = await userRepository.create({
       name: data.name,
       phoneNumber: data.phoneNumber,
@@ -30,13 +30,13 @@ export class UserService {
     if (!user) {
       throw new Error('User not found');
     }
-    
+
     // Prevent blocking the last admin (optional safeguard, but good practice)
     if (user.role === Role.ADMIN) {
       const allUsers = await userRepository.countAll();
       // Basic check, ideally we should count ACTIVE admins, but this is a simple safeguard
       if (allUsers <= 1) {
-         throw new Error('Cannot block the only admin account');
+        throw new Error('Cannot block the only admin account');
       }
     }
 
@@ -64,6 +64,21 @@ export class UserService {
 
     await userRepository.delete(id);
     return { message: 'User deleted successfully' };
+  }
+
+  async resetPassword(id: string, newPassword: string) {
+    const user = await userRepository.findById(id);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await userRepository.updatePassword(id, passwordHash);
+
+    // Log out the user from all devices after password reset for security
+    await refreshTokenRepository.deleteAllForUser(id);
+
+    return { message: 'Password reset successfully' };
   }
 
   async getAllMembers() {
