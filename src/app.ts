@@ -8,7 +8,10 @@ import { errorHandler } from './middlewares/error.middleware';
 const app = express();
 
 app.use(cors({
-  origin: 'http://localhost:3000', // Update if frontend is on a different port
+  origin: [
+    'http://localhost:3000',
+    'https://restaurantfrontend-ei8x.onrender.com'
+  ],
   credentials: true,
 }));
 app.use(cookieParser());
