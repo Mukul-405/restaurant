@@ -27,6 +27,7 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   refreshTokens RefreshToken[]
+  Order         Order[]
 
   @@index([phoneNumber])
 }
@@ -62,4 +63,38 @@ model MenuItem {
 
   categoryId  Int
   category    Category @relation(fields: [categoryId], references: [id])
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model Order {
+  id Int @id @default(autoincrement())
+
+  phoneNumber String @db.VarChar(15)
+  items       Json
+
+  baseAmount Decimal @db.Decimal(10, 2) @default(0)
+  gstAmount Decimal @db.Decimal(10, 2) @default(0)
+  discountAmount Decimal @db.Decimal(10, 2) @default(0)
+  finalDiscountedAmount Decimal @db.Decimal(10, 2) @default(0)
+
+  cancellationReason String?
+
+  status OrderStatus @default(PENDING)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phoneNumber])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([userId, status, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
 }
