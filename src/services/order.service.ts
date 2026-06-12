@@ -16,6 +16,7 @@ export class OrderService {
     gstAmount: number;
     discountAmount: number;
     finalDiscountedAmount: number;
+    tableNumber?: number;
     userId: string;
   }) {
     if (!data.items || data.items.length === 0) {
@@ -32,6 +33,7 @@ export class OrderService {
       gstAmount: data.gstAmount,
       discountAmount: data.discountAmount,
       finalDiscountedAmount: data.finalDiscountedAmount,
+      tableNumber: data.tableNumber,
       status: OrderStatus.PENDING,
       userId: data.userId,
     };
@@ -57,6 +59,7 @@ export class OrderService {
       gstAmount?: number;
       discountAmount?: number;
       finalDiscountedAmount?: number;
+      tableNumber?: number;
     }
   ) {
     const updateData: Prisma.OrderUpdateInput = {};
@@ -74,6 +77,7 @@ export class OrderService {
     if (data.gstAmount !== undefined) updateData.gstAmount = data.gstAmount;
     if (data.discountAmount !== undefined) updateData.discountAmount = data.discountAmount;
     if (data.finalDiscountedAmount !== undefined) updateData.finalDiscountedAmount = data.finalDiscountedAmount;
+    if (data.tableNumber !== undefined) updateData.tableNumber = data.tableNumber;
 
     // Optionally check if order exists before updating
     await this.getOrderById(id);

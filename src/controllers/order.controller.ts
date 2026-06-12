@@ -18,6 +18,7 @@ const createOrderSchema = z.object({
   gstAmount: z.number().min(0),
   discountAmount: z.number().min(0).default(0),
   finalDiscountedAmount: z.number().min(0),
+  tableNumber: z.number().int().positive().optional(),
 });
 
 const updateOrderSchema = z.object({
@@ -28,6 +29,7 @@ const updateOrderSchema = z.object({
   gstAmount: z.number().min(0).optional(),
   discountAmount: z.number().min(0).optional(),
   finalDiscountedAmount: z.number().min(0).optional(),
+  tableNumber: z.number().int().positive().optional(),
 });
 
 const searchOrderSchema = z.object({
