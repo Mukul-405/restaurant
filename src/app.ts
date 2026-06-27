@@ -12,6 +12,8 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://10.221.54.4:3000',
     'https://restaurantfrontend-ei8x.onrender.com'
   ],
   credentials: true,
