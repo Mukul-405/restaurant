@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
+import { AppError } from '../utils/AppError';
 
 export const errorHandler = (
   err: Error,
@@ -14,6 +15,10 @@ export const errorHandler = (
       message: 'Validation Error',
       errors: err.issues,
     });
+  }
+
+  if (err instanceof AppError) {
+    return res.status(err.statusCode).json({ message: err.message });
   }
 
   // Handle specific errors like JWT

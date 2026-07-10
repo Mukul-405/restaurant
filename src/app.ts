@@ -7,6 +7,8 @@ import menuRoutes from './routes/menu.routes';
 import orderRoutes from './routes/order.routes';
 import { errorHandler } from './middlewares/error.middleware';
 import analysisRoutes from './routes/analysis.routes';
+
+import roomTypeRoutes from './routes/roomType.routes';
 const app = express();
 
 app.use(cors({
@@ -27,6 +29,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/menu', menuRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/analysis', analysisRoutes);
+
+app.use('/api/room-types', roomTypeRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);
