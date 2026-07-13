@@ -9,6 +9,7 @@ import { errorHandler } from './middlewares/error.middleware';
 import analysisRoutes from './routes/analysis.routes';
 
 import roomTypeRoutes from './routes/roomType.routes';
+import bookingRoutes from './routes/booking.routes';
 const app = express();
 
 app.use(cors({
@@ -31,6 +32,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/analysis', analysisRoutes);
 
 app.use('/api/room-types', roomTypeRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

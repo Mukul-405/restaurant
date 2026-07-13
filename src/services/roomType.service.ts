@@ -1,20 +1,60 @@
 import { roomTypeRepository } from '../repositories/roomType.repository';
 import { Prisma } from '@prisma/client';
+import { prisma } from '../config/prisma';
 
 export class RoomTypeService {
   async createRoomType(data: Prisma.RoomTypeCreateInput) {
     return roomTypeRepository.create(data);
   }
 
-  async getAllRoomTypes(startDate?: string, endDate?: string) {
+  async getAllRoomTypes() {
     const roomTypes = await roomTypeRepository.findAll();
-    
-    // Since individual Room tracking is removed, we currently return totalRooms
-    // as availableRooms to keep the structure intact for the UI.
-    return roomTypes.map(rt => ({
-      ...rt,
-      availableRooms: rt.totalRooms
-    }));
+    return roomTypes.map(rt => {
+      const physicalRooms = (rt.rooms as any[]) || [];
+      let availableCount = physicalRooms.length;
+      if (availableCount < 0) availableCount = 0;
+      
+      return {
+        ...rt,
+        availableRooms: availableCount
+      };
+    });
+  }
+
+  async getAvailability(startDate: string, endDate: string) {
+    const checkInDate = new Date(startDate);
+    const checkOutDate = new Date(endDate);
+
+    const overlappingBookings = await prisma.userRoomBooking.findMany({
+      where: {
+        status: { in: ['RESERVED', 'CHECKED_IN'] },
+        checkIn: { lte: checkOutDate },
+        checkOut: { gte: checkInDate }
+      }
+    });
+
+    const bookedCounts: Record<string, number> = {};
+    for (const booking of overlappingBookings) {
+      const bookingRooms = (booking.rooms as any[]) || [];
+      for (const br of bookingRooms) {
+        bookedCounts[br.roomCode] = (bookedCounts[br.roomCode] || 0) + 1;
+      }
+    }
+
+    const roomTypes = await roomTypeRepository.findAll();
+    const availabilityMap: Record<string, number> = {};
+
+    for (const rt of roomTypes) {
+      const physicalRooms = (rt.rooms as any[]) || [];
+      const bookedCount = bookedCounts[rt.roomCode] || 0;
+      
+      let availableCount = physicalRooms.length - bookedCount;
+      if (availableCount < 0) availableCount = 0;
+
+      availabilityMap[rt.roomCode] = availableCount;
+    }
+
+    return availabilityMap;
   }
 
   async getRoomTypeById(id: number) {

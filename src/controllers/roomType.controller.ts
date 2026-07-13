@@ -30,9 +30,17 @@ export class RoomTypeController {
 
   async getAllRoomTypes(req: Request, res: Response, next: NextFunction) {
     try {
-      const { startDate, endDate } = req.query;
-      const roomTypes = await roomTypeService.getAllRoomTypes(startDate as string, endDate as string);
+      const roomTypes = await roomTypeService.getAllRoomTypes();
       res.status(200).json(roomTypes);
+    } catch (error) { next(error); }
+  }
+
+  async getAvailability(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { startDate, endDate } = req.query;
+      if (!startDate || !endDate) return res.status(400).json({ message: "startDate and endDate are required" });
+      const availability = await roomTypeService.getAvailability(startDate as string, endDate as string);
+      res.status(200).json(availability);
     } catch (error) { next(error); }
   }
 

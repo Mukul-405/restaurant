@@ -5,6 +5,7 @@ import { authenticate, authorize } from '../middlewares/auth.middleware';
 const router = Router();
 
 router.get('/', authenticate, roomTypeController.getAllRoomTypes);
+router.get('/availability', authenticate, roomTypeController.getAvailability);
 router.get('/:id', authenticate, roomTypeController.getRoomTypeById);
 router.post('/', authenticate, authorize(['ADMIN']), roomTypeController.createRoomType);
 router.patch('/:id', authenticate, authorize(['ADMIN']), roomTypeController.updateRoomType);
