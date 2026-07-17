@@ -40,6 +40,61 @@ export class BookingController {
     }
   }
 
+  async getBookings(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { phone } = req.query;
+      const phoneStr = typeof phone === 'string' ? phone : undefined;
+      const bookings = await bookingService.getBookingsByPhone(phoneStr);
+      res.status(200).json(bookings);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async checkInBooking(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = parseInt(req.params.id as string);
+      const { rooms } = req.body;
+      if (!rooms || !Array.isArray(rooms)) {
+        return res.status(400).json({ message: 'Rooms array is required for check-in' });
+      }
+      const booking = await bookingService.checkInBooking(id, rooms);
+      res.status(200).json({ message: 'Checked in successfully', booking });
+    } catch (error: any) {
+      if (error.message && (error.message.includes('not found') || error.message.includes('not available') || error.message.includes('status'))) {
+        return res.status(400).json({ message: error.message });
+      }
+      next(error);
+    }
+  }
+  async checkOutBooking(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = parseInt(req.params.id as string);
+      const booking = await bookingService.checkOutBooking(id);
+      res.status(200).json({ message: 'Checked out successfully', booking });
+    } catch (error: any) {
+      if (error.message && (error.message.includes('not found') || error.message.includes('status'))) {
+        return res.status(400).json({ message: error.message });
+      }
+      next(error);
+    }
+  }
+  async editBookingRooms(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = parseInt(req.params.id as string);
+      const { rooms } = req.body;
+      if (!rooms || !Array.isArray(rooms)) {
+        return res.status(400).json({ message: 'Rooms array is required for editing rooms' });
+      }
+      const booking = await bookingService.editBookingRooms(id, rooms);
+      res.status(200).json({ message: 'Rooms edited successfully', booking });
+    } catch (error: any) {
+      if (error.message && (error.message.includes('not found') || error.message.includes('status') || error.message.includes('occupied') || error.message.includes('exist'))) {
+        return res.status(400).json({ message: error.message });
+      }
+      next(error);
+    }
+  }
 
 }
 
