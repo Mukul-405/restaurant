@@ -10,6 +10,8 @@ import analysisRoutes from './routes/analysis.routes';
 
 import roomTypeRoutes from './routes/roomType.routes';
 import bookingRoutes from './routes/booking.routes';
+import cmRoutes from './routes/cm.routes';
+
 const app = express();
 
 app.use(cors({
@@ -33,6 +35,7 @@ app.use('/api/analysis', analysisRoutes);
 
 app.use('/api/room-types', roomTypeRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/cm', cmRoutes);
 
 // Error Handling Middleware
 app.use(errorHandler);

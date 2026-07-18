@@ -1,6 +1,7 @@
 import { roomTypeRepository } from '../repositories/roomType.repository';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { cmService } from './cm.service';
 
 export class RoomTypeService {
   async createRoomType(data: Prisma.RoomTypeCreateInput) {
@@ -22,6 +23,7 @@ export class RoomTypeService {
   }
 
   async getAvailability(startDate: string, endDate: string) {
+    /*
     const checkInDate = new Date(startDate);
     const checkOutDate = new Date(endDate);
 
@@ -55,6 +57,53 @@ export class RoomTypeService {
     }
 
     return availabilityMap;
+    */
+
+    try {
+      const roomTypes = await roomTypeRepository.findAll();
+      const aiosellData = await cmService.fetchInventory(startDate, endDate);
+      const availabilityMap: Record<string, number> = {};
+
+      for (const rt of roomTypes) {
+        availabilityMap[rt.roomCode] = Infinity;
+      }
+
+      if (aiosellData && Array.isArray(aiosellData.updates)) {
+        for (const update of aiosellData.updates) {
+          if (Array.isArray(update.rooms)) {
+            const updatedRoomsInBlock = new Set<string>();
+            for (const room of update.rooms) {
+              const roomCode = room.roomCode;
+              const available = room.available || 0;
+              updatedRoomsInBlock.add(roomCode);
+              
+              if (availabilityMap[roomCode] !== undefined) {
+                availabilityMap[roomCode] = Math.min(availabilityMap[roomCode], available);
+              } else {
+                 availabilityMap[roomCode] = available;
+              }
+            }
+            // If a room is not present in this date's availability, it means 0 availability
+            for (const rt of roomTypes) {
+              if (!updatedRoomsInBlock.has(rt.roomCode) && availabilityMap[rt.roomCode] !== undefined) {
+                availabilityMap[rt.roomCode] = 0;
+              }
+            }
+          }
+        }
+      }
+
+      for (const key of Object.keys(availabilityMap)) {
+        if (availabilityMap[key] === Infinity) {
+          availabilityMap[key] = 0; // If no updates were found for this room, assume 0
+        }
+      }
+
+      return availabilityMap;
+    } catch (error) {
+      console.error("Error fetching inventory from Aiosell:", error);
+      throw error;
+    }
   }
 
   async getRoomTypeById(id: number) {
