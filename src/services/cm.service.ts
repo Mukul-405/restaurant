@@ -1,19 +1,32 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { prisma } from '../config/prisma';
 
 class CmService {
   async processReservation(payload: any) {
     const { action, bookingId, channel } = payload;
-
-    if (action === 'book') {
-      await this.createBooking(payload);
-    } else if (action === 'modify') {
-      await this.modifyBooking(payload);
-    } else if (action === 'cancel') {
-      await this.cancelBooking(bookingId, channel);
-    } else {
+    if (!['book', 'modify', 'cancel'].includes(action)) {
       throw new Error(`Unsupported action: ${action}`);
+    }
+
+    const existing = await prisma.userRoomBooking.findFirst({
+      where: { bookingId, channel }
+    });
+
+    if (action === 'cancel') {
+      if (existing) {
+        await prisma.userRoomBooking.update({
+          where: { id: existing.id },
+          data: { status: 'CANCELLED' as any }
+        });
+      }
+      return;
+    }
+
+    const data = this.mapPayloadToDbFields(payload);
+    
+    if (existing) {
+      await prisma.userRoomBooking.update({ where: { id: existing.id }, data });
+    } else {
+      await prisma.userRoomBooking.create({ data });
     }
   }
 
@@ -50,220 +63,67 @@ class CmService {
     };
   }
 
-  private async createBooking(payload: any) {
-    const data = this.mapPayloadToDbFields(payload);
 
-    await prisma.userRoomBooking.create({
-      data
+
+  private async callAiosellApi(endpoint: string, payload: any) {
+    const username = process.env.AIOSELL_USERNAME || 'sandbox';
+    const password = process.env.AIOSELL_PASSWORD || 'sandbox123';
+    const pmsSlug = process.env.AIOSELL_PMS_SLUG || 'sample-pms';
+    
+    payload.hotelCode = payload.hotelCode || process.env.AIOSELL_HOTEL_CODE || 'sandbox-pms';
+
+    const auth = Buffer.from(`${username}:${password}`).toString('base64');
+    const response = await fetch(`https://live.aiosell.com/api/v2/cm/${endpoint}/${pmsSlug}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${auth}`
+      },
+      body: JSON.stringify(payload)
     });
-  }
 
-  private async modifyBooking(payload: any) {
-    // Aiosell says modify payload is the new full state.
-    // We should find the existing booking by channel and bookingId.
-    const existing = await prisma.userRoomBooking.findFirst({
-      where: {
-        bookingId: payload.bookingId,
-        channel: payload.channel
-      }
-    });
-
-    if (!existing) {
-      // If it doesn't exist, we can just create it to be safe, or throw error.
-      // Creating is usually safer for out-of-order webhooks.
-      await this.createBooking(payload);
-      return;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`CM API error: ${response.status} ${response.statusText} - ${errorText}`);
     }
 
-    const data = this.mapPayloadToDbFields(payload);
-
-    await prisma.userRoomBooking.update({
-      where: { id: existing.id },
-      data
-    });
-  }
-
-  private async cancelBooking(bookingId: string, channel: string) {
-    const existing = await prisma.userRoomBooking.findFirst({
-      where: {
-        bookingId: bookingId,
-        channel: channel
-      }
-    });
-
-    if (existing) {
-      await prisma.userRoomBooking.update({
-        where: { id: existing.id },
-        data: {
-          status: 'CANCELLED' as any
-        }
-      });
-    }
+    return response.json();
   }
 
   async fetchInventory(startDate: string, endDate: string) {
-    const hotelCode = process.env.AIOSELL_HOTEL_CODE || 'sandbox-pms';
-    const username = process.env.AIOSELL_USERNAME || 'sandbox';
-    const password = process.env.AIOSELL_PASSWORD || 'sandbox123';
-
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-
-    const payload = {
-      type: "inventory",
-      hotelCode,
-      startDate,
-      endDate
-    };
-
-    const pmsSlug = process.env.AIOSELL_PMS_SLUG || 'sample-pms';
-    const response = await fetch(`https://live.aiosell.com/api/v2/cm/data/${pmsSlug}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`CM API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    return data;
+    return this.callAiosellApi('data', { type: "inventory", startDate, endDate });
   }
 
   async fetchRates(startDate: string, endDate: string) {
-    const hotelCode = process.env.AIOSELL_HOTEL_CODE || 'sandbox-pms';
-    const username = process.env.AIOSELL_USERNAME || 'sandbox';
-    const password = process.env.AIOSELL_PASSWORD || 'sandbox123';
-
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-
-    const payload = {
-      type: "rates",
-      hotelCode,
-      startDate,
-      endDate
-    };
-
-    const pmsSlug = process.env.AIOSELL_PMS_SLUG || 'sample-pms';
-    const response = await fetch(`https://live.aiosell.com/api/v2/cm/data/${pmsSlug}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`CM API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    return data;
+    return this.callAiosellApi('data', { type: "rates", startDate, endDate });
   }
 
   async fetchReservations(startDate: string, endDate: string) {
-    const hotelCode = process.env.AIOSELL_HOTEL_CODE || 'sandbox-pms';
-    const username = process.env.AIOSELL_USERNAME || 'sandbox';
-    const password = process.env.AIOSELL_PASSWORD || 'sandbox123';
-
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-
-    const payload = {
-      type: "reservation",
-      hotelCode,
-      startDate,
-      endDate
-    };
-
-    const pmsSlug = process.env.AIOSELL_PMS_SLUG || 'sample-pms';
-    const response = await fetch(`https://live.aiosell.com/api/v2/cm/data/${pmsSlug}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`CM API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    return data;
+    return this.callAiosellApi('data', { type: "reservation", startDate, endDate });
   }
 
+  /**
+   * Pushes inventory updates.
+   * Note: This method also handles Inventory Restrictions Push natively, 
+   * just include a `restrictions` object instead of `available` inside `updates`.
+   */
   async pushInventory(updates: any[], toChannels?: string[]) {
-    const hotelCode = process.env.AIOSELL_HOTEL_CODE || 'sandbox-pms';
-    const username = process.env.AIOSELL_USERNAME || 'sandbox';
-    const password = process.env.AIOSELL_PASSWORD || 'sandbox123';
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    
-    const payload: any = {
-      hotelCode,
-      updates
-    };
-
-    if (toChannels && toChannels.length > 0) {
-      payload.toChannels = toChannels;
-    }
-
-    const pmsSlug = process.env.AIOSELL_PMS_SLUG || 'sample-pms';
-    const response = await fetch(`https://live.aiosell.com/api/v2/cm/update/${pmsSlug}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`
-      },
-      body: JSON.stringify(payload)
+    return this.callAiosellApi('update', { 
+      updates, 
+      ...(toChannels?.length ? { toChannels } : {}) 
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`CM API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    return response.json();
   }
 
+  /**
+   * Pushes rate updates.
+   * Note: This method also handles Rate Restrictions Push natively,
+   * just include a `restrictions` object inside `updates`.
+   */
   async pushRates(updates: any[], toChannels?: string[]) {
-    const hotelCode = process.env.AIOSELL_HOTEL_CODE || 'sandbox-pms';
-    const username = process.env.AIOSELL_USERNAME || 'sandbox';
-    const password = process.env.AIOSELL_PASSWORD || 'sandbox123';
-    const auth = Buffer.from(`${username}:${password}`).toString('base64');
-    
-    const payload: any = {
-      hotelCode,
-      updates
-    };
-
-    if (toChannels && toChannels.length > 0) {
-      payload.toChannels = toChannels;
-    }
-
-    const pmsSlug = process.env.AIOSELL_PMS_SLUG || 'sample-pms';
-    const response = await fetch(`https://live.aiosell.com/api/v2/cm/update-rates/${pmsSlug}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`
-      },
-      body: JSON.stringify(payload)
+    return this.callAiosellApi('update-rates', { 
+      updates, 
+      ...(toChannels?.length ? { toChannels } : {}) 
     });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`CM API error: ${response.status} ${response.statusText} - ${errorText}`);
-    }
-
-    return response.json();
   }
 }
 

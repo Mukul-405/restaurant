@@ -31,11 +31,10 @@ export class UserService {
       throw new Error('User not found');
     }
 
-    // Prevent blocking the last admin (optional safeguard, but good practice)
+    // Prevent blocking the last admin
     if (user.role === Role.ADMIN) {
-      const allUsers = await userRepository.countAll();
-      // Basic check, ideally we should count ACTIVE admins, but this is a simple safeguard
-      if (allUsers <= 1) {
+      const activeAdmins = await userRepository.countAdmins();
+      if (activeAdmins <= 1) {
         throw new Error('Cannot block the only admin account');
       }
     }
@@ -62,8 +61,15 @@ export class UserService {
       throw new Error('User not found');
     }
 
-    await userRepository.delete(id);
-    return { message: 'User deleted successfully' };
+    try {
+      await userRepository.delete(id);
+      return { message: 'User deleted successfully' };
+    } catch (error: any) {
+      if (error.code === 'P2003' || (error.message && error.message.includes('constraint'))) {
+        throw new Error('Cannot delete this member because they have associated orders. Please block them instead.');
+      }
+      throw error;
+    }
   }
 
   async resetPassword(id: string, newPassword: string) {

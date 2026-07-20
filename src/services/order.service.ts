@@ -27,10 +27,10 @@ export class OrderService {
     // Prisma JSON type expects any valid JSON, but items is strongly typed here
     const prismaItems = data.items as unknown as Prisma.InputJsonValue;
 
-    const initialKotHistory = data.items.map(i => ({ 
+    const initialKotHistory = data.items.map(i => ({
       menuItemId: i.menuItemId,
-      name: i.name, 
-      qty: i.quantity 
+      name: i.name,
+      qty: i.quantity
     }));
 
     const createData: any = {
@@ -85,13 +85,13 @@ export class OrderService {
 
     let currentKotHistory: any[] = Array.isArray(existingOrder.kotHistory) ? existingOrder.kotHistory : [];
     if (data.kotHistory !== undefined) {
-       currentKotHistory = data.kotHistory;
-       updateData.kotHistory = data.kotHistory as unknown as Prisma.InputJsonValue;
+      currentKotHistory = data.kotHistory;
+      updateData.kotHistory = data.kotHistory as unknown as Prisma.InputJsonValue;
     }
 
     if (data.items) {
       updateData.items = data.items as unknown as Prisma.InputJsonValue;
-      
+
       const existingItemsMap = new Map();
       const existingItems: any[] = Array.isArray(existingOrder.items) ? existingOrder.items : [];
       existingItems.forEach((i: any) => existingItemsMap.set(i.menuItemId, i.quantity));
@@ -99,36 +99,36 @@ export class OrderService {
       let kotChanged = false;
 
       data.items.forEach(item => {
-         const existingQty = existingItemsMap.get(item.menuItemId) || 0;
-         const diff = item.quantity - existingQty;
-         
-         if (diff !== 0) {
-            kotChanged = true;
-            const existingKotItem = currentKotHistory.find((k: any) => k.menuItemId === item.menuItemId);
-            if (existingKotItem) {
-               existingKotItem.qty += diff;
-            } else if (diff > 0) {
-               currentKotHistory.push({
-                  menuItemId: item.menuItemId,
-                  name: item.name,
-                  qty: diff
-               });
-            }
-         }
-         existingItemsMap.delete(item.menuItemId);
+        const existingQty = existingItemsMap.get(item.menuItemId) || 0;
+        const diff = item.quantity - existingQty;
+
+        if (diff !== 0) {
+          kotChanged = true;
+          const existingKotItem = currentKotHistory.find((k: any) => k.menuItemId === item.menuItemId);
+          if (existingKotItem) {
+            existingKotItem.qty += diff;
+          } else if (diff > 0) {
+            currentKotHistory.push({
+              menuItemId: item.menuItemId,
+              name: item.name,
+              qty: diff
+            });
+          }
+        }
+        existingItemsMap.delete(item.menuItemId);
       });
 
       existingItemsMap.forEach((qty, menuItemId) => {
-         const existingKotItem = currentKotHistory.find((k: any) => k.menuItemId === menuItemId);
-         if (existingKotItem) {
-            kotChanged = true;
-            existingKotItem.qty -= qty;
-         }
+        const existingKotItem = currentKotHistory.find((k: any) => k.menuItemId === menuItemId);
+        if (existingKotItem) {
+          kotChanged = true;
+          existingKotItem.qty -= qty;
+        }
       });
 
       if (kotChanged) {
-         currentKotHistory = currentKotHistory.filter((k: any) => k.qty > 0);
-         updateData.kotHistory = currentKotHistory as unknown as Prisma.InputJsonValue;
+        currentKotHistory = currentKotHistory.filter((k: any) => k.qty > 0);
+        updateData.kotHistory = currentKotHistory as unknown as Prisma.InputJsonValue;
       }
     }
 
@@ -147,9 +147,9 @@ export class OrderService {
   }) {
     const page = query.page || 1;
     const limit = query.limit || 10;
-    
+
     const { total, data } = await orderRepository.findOrders({ ...query, page, limit });
-    
+
     return {
       data,
       meta: {

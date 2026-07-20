@@ -28,6 +28,15 @@ export class UserRepository {
     return prisma.user.count();
   }
 
+  async countAdmins(): Promise<number> {
+    return prisma.user.count({
+      where: {
+        role: Role.ADMIN,
+        isActive: true,
+      },
+    });
+  }
+
   async updateStatus(id: string, isActive: boolean) {
     return prisma.user.update({
       where: { id },

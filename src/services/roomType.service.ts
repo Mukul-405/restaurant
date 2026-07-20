@@ -23,79 +23,24 @@ export class RoomTypeService {
   }
 
   async getAvailability(startDate: string, endDate: string) {
-    /*
-    const checkInDate = new Date(startDate);
-    const checkOutDate = new Date(endDate);
-
-    const overlappingBookings = await prisma.userRoomBooking.findMany({
-      where: {
-        status: { in: ['RESERVED', 'CHECKED_IN'] },
-        checkIn: { lte: checkOutDate },
-        checkOut: { gte: checkInDate }
-      }
-    });
-
-    const bookedCounts: Record<string, number> = {};
-    for (const booking of overlappingBookings) {
-      const bookingRooms = (booking.rooms as any[]) || [];
-      for (const br of bookingRooms) {
-        bookedCounts[br.roomCode] = (bookedCounts[br.roomCode] || 0) + 1;
-      }
-    }
-
-    const roomTypes = await roomTypeRepository.findAll();
-    const availabilityMap: Record<string, number> = {};
-
-    for (const rt of roomTypes) {
-      const physicalRooms = (rt.rooms as any[]) || [];
-      const bookedCount = bookedCounts[rt.roomCode] || 0;
-      
-      let availableCount = physicalRooms.length - bookedCount;
-      if (availableCount < 0) availableCount = 0;
-
-      availabilityMap[rt.roomCode] = availableCount;
-    }
-
-    return availabilityMap;
-    */
-
     try {
-      const roomTypes = await roomTypeRepository.findAll();
-      const aiosellData = await cmService.fetchInventory(startDate, endDate);
+      const inventoryData = await cmService.fetchInventory(startDate, endDate);
       const availabilityMap: Record<string, number> = {};
 
-      for (const rt of roomTypes) {
-        availabilityMap[rt.roomCode] = Infinity;
-      }
-
-      if (aiosellData && Array.isArray(aiosellData.updates)) {
-        for (const update of aiosellData.updates) {
-          if (Array.isArray(update.rooms)) {
-            const updatedRoomsInBlock = new Set<string>();
-            for (const room of update.rooms) {
-              const roomCode = room.roomCode;
-              const available = room.available || 0;
-              updatedRoomsInBlock.add(roomCode);
-              
-              if (availabilityMap[roomCode] !== undefined) {
-                availabilityMap[roomCode] = Math.min(availabilityMap[roomCode], available);
+      // Aiosell returns an array of date entries, each with rooms[].roomCode and rooms[].available.
+      // We take the minimum availability across all dates for each roomCode.
+      if (Array.isArray(inventoryData)) {
+        for (const dateEntry of inventoryData) {
+          const rooms = dateEntry.rooms || [];
+          for (const room of rooms) {
+            if (room.roomCode && typeof room.available === 'number') {
+              if (availabilityMap[room.roomCode] === undefined) {
+                availabilityMap[room.roomCode] = room.available;
               } else {
-                 availabilityMap[roomCode] = available;
-              }
-            }
-            // If a room is not present in this date's availability, it means 0 availability
-            for (const rt of roomTypes) {
-              if (!updatedRoomsInBlock.has(rt.roomCode) && availabilityMap[rt.roomCode] !== undefined) {
-                availabilityMap[rt.roomCode] = 0;
+                availabilityMap[room.roomCode] = Math.min(availabilityMap[room.roomCode], room.available);
               }
             }
           }
-        }
-      }
-
-      for (const key of Object.keys(availabilityMap)) {
-        if (availabilityMap[key] === Infinity) {
-          availabilityMap[key] = 0; // If no updates were found for this room, assume 0
         }
       }
 
@@ -137,6 +82,8 @@ export class RoomTypeService {
     if (!roomType) throw new Error('Room type not found');
     
     const currentRooms = Array.isArray(roomType.rooms) ? roomType.rooms : [];
+    const room = currentRooms.find((r: any) => r.roomNumber === roomNumber) as any;
+    if (room?.status === 'checked in') throw new Error(`Cannot delete room ${roomNumber}. It is currently checked in.`);
     const newRooms = currentRooms.filter((r: any) => r.roomNumber !== roomNumber);
 
     return roomTypeRepository.update(id, { rooms: newRooms as any });

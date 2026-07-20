@@ -16,7 +16,7 @@ const bookingSchema = z.object({
     rateplanCode: z.string(),
     adults: z.number().int(),
     children: z.number().int(),
-    roomNumber: z.string()
+    roomNumber: z.string().optional().nullable()
   })).min(1, 'At least one room is required'),
   source: z.enum(['DIRECT', 'OTA']).default('DIRECT')
 });

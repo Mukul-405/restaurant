@@ -7,9 +7,11 @@ export class MenuRepository {
     });
   }
 
-  async createCategory(name: string) {
-    return prisma.category.create({
-      data: { name },
+  async upsertCategory(name: string) {
+    return prisma.category.upsert({
+      where: { name },
+      update: {},
+      create: { name },
     });
   }
 

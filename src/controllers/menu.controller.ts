@@ -42,20 +42,7 @@ export class MenuController {
     }
   }
 
-  async uploadMenuCsv(req: Request, res: Response, next: NextFunction) {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ message: 'No CSV file uploaded' });
-      }
 
-      const filePath = req.file.path;
-      const result = await menuService.processMenuCsv(filePath);
-
-      res.status(201).json(result);
-    } catch (error) {
-      next(error);
-    }
-  }
 
   async getAllMenuItems(req: Request, res: Response, next: NextFunction) {
     try {
