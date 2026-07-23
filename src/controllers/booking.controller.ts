@@ -68,6 +68,20 @@ export class BookingController {
       next(error);
     }
   }
+
+  async getBookingById(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = parseInt(req.params.id as string);
+      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const booking = await bookingService.getBookingById(id);
+      res.status(200).json(booking);
+    } catch (error: any) {
+      if (error.message && error.message.includes('not found')) {
+        return res.status(404).json({ message: error.message });
+      }
+      next(error);
+    }
+  }
   async checkOutBooking(req: Request, res: Response, next: NextFunction) {
     try {
       const id = parseInt(req.params.id as string);

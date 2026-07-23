@@ -1,5 +1,6 @@
 import { orderRepository } from '../repositories/order.repository';
 import { OrderStatus, Prisma } from '@prisma/client';
+import { prisma } from '../config/prisma';
 
 interface OrderItem {
   menuItemId: number;
@@ -10,7 +11,7 @@ interface OrderItem {
 
 export class OrderService {
   async createOrder(data: {
-    phoneNumber: string;
+    phoneNumber?: string;
     items: OrderItem[];
     baseAmount: number;
     gstAmount: number;
@@ -159,6 +160,60 @@ export class OrderService {
         totalPages: Math.ceil(total / limit),
       }
     };
+  }
+  async transferToRoom(orderId: number, guestPhone: string) {
+    const order = await this.getOrderById(orderId);
+    if (!order) throw new Error('Order not found');
+    if (order.status === 'COMPLETED') throw new Error('Order is already completed');
+    if (order.status === 'CANCELLED') throw new Error('Order is cancelled');
+
+    const booking = await prisma.userRoomBooking.findFirst({
+      where: {
+        guestPhone,
+        status: { in: ['RESERVED', 'CHECKED_IN'] }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    if (!booking) {
+      throw new Error('No active room booking found for this phone number');
+    }
+
+    const currentFoodOrders: any[] = Array.isArray((booking as any).foodOrders) ? (booking as any).foodOrders : [];
+    const orderItems: any[] = Array.isArray(order.items) ? order.items : [];
+
+    orderItems.forEach(item => {
+      const existing = currentFoodOrders.find((f: any) => f.menuItemId === item.menuItemId || f.name === item.name);
+      if (existing) {
+        existing.quantity += item.quantity;
+        existing.price = item.price; // keep latest price
+      } else {
+        currentFoodOrders.push({
+          menuItemId: item.menuItemId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price
+        });
+      }
+    });
+
+    const newFoodTotal = new Prisma.Decimal((booking as any).foodTotalAmount.toString()).plus(order.finalDiscountedAmount.toString());
+
+    await prisma.$transaction([
+      prisma.userRoomBooking.update({
+        where: { id: booking.id },
+        data: {
+          foodOrders: currentFoodOrders as unknown as Prisma.InputJsonValue,
+          foodTotalAmount: newFoodTotal
+        }
+      }),
+      prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'COMPLETED' }
+      })
+    ]);
+
+    return { message: 'Order successfully transferred to room' };
   }
 }
 

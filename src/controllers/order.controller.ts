@@ -12,7 +12,7 @@ const orderItemSchema = z.object({
 });
 
 const createOrderSchema = z.object({
-  phoneNumber: z.string().trim().min(10).max(15),
+  phoneNumber: z.string().trim().max(15).optional(),
   items: z.array(orderItemSchema).min(1).max(100),
   baseAmount: z.number().min(0),
   gstAmount: z.number().min(0),
@@ -94,6 +94,22 @@ export class OrderController {
       }
 
       const result = await orderService.searchOrders(query);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+  async transferToRoom(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = parseInt(req.params.id as string);
+      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+
+      const guestPhone = req.body.guestPhone;
+      if (!guestPhone || typeof guestPhone !== 'string') {
+        return res.status(400).json({ message: 'Valid guestPhone is required' });
+      }
+
+      const result = await orderService.transferToRoom(id, guestPhone);
       res.status(200).json(result);
     } catch (error) {
       next(error);

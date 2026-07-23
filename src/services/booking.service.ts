@@ -95,6 +95,14 @@ export class BookingService {
     });
   }
 
+  async getBookingById(id: number) {
+    const booking = await prisma.userRoomBooking.findUnique({
+      where: { id }
+    });
+    if (!booking) throw new Error('Booking not found');
+    return booking;
+  }
+
   async checkInBooking(id: number, assignments: { roomCode: string, roomNumber: string }[]) {
     return prisma.$transaction(async (tx) => {
       const booking = await tx.userRoomBooking.findUnique({

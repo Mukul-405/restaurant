@@ -11,6 +11,7 @@ router.use(authenticate);
 router.post('/', orderController.createOrder);
 router.get('/', orderController.searchOrders);
 router.get('/:id', orderController.getOrderById);
+router.post('/:id/transfer-to-room', orderController.transferToRoom);
 router.put('/:id', orderController.updateOrder);
 
 export default router;

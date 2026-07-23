@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getRevenueAnalysisService, getWaiterAnalysisService } from '../services/analysis.service';
+import { getRevenueAnalysisService, getWaiterAnalysisService, getBookingAnalysisService, getChannelAnalysisService } from '../services/analysis.service';
 
 function parseDateRange(query: any): { start?: Date; end?: Date; error?: string } {
   const { startDate, endDate } = query;
@@ -14,6 +14,12 @@ function parseDateRange(query: any): { start?: Date; end?: Date; error?: string 
   if (start > end) {
     return { error: 'startDate cannot be after endDate' };
   }
+  
+  const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
+  if (end.getTime() - start.getTime() > ONE_YEAR_MS) {
+    return { error: 'Date range cannot exceed 1 year. Please select a smaller range.' };
+  }
+
   return { start, end };
 }
 
@@ -35,6 +41,30 @@ export const getWaiterAnalysis = async (req: Request, res: Response, next: NextF
     if (error || !start || !end) return res.status(400).json({ error });
 
     const data = await getWaiterAnalysisService(start, end);
+    res.status(200).json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getChannelAnalysis = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { start, end, error } = parseDateRange(req.query);
+    if (error || !start || !end) return res.status(400).json({ error });
+
+    const data = await getChannelAnalysisService(start, end);
+    res.status(200).json(data);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getBookingAnalysis = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { start, end, error } = parseDateRange(req.query);
+    if (error || !start || !end) return res.status(400).json({ error });
+
+    const data = await getBookingAnalysisService(start, end);
     res.status(200).json(data);
   } catch (error) {
     next(error);

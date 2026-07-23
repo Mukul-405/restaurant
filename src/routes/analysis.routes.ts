@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getRevenueAnalysis, getWaiterAnalysis } from '../controllers/analysis.controller';
+import { getRevenueAnalysis, getWaiterAnalysis, getBookingAnalysis, getChannelAnalysis } from '../controllers/analysis.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
 
 const router = Router();
@@ -10,5 +10,7 @@ router.use(authorize(['ADMIN']));
 
 router.get('/revenue', getRevenueAnalysis);
 router.get('/waiter', getWaiterAnalysis);
+router.get('/bookings', getBookingAnalysis);
+router.get('/channel', getChannelAnalysis);
 
 export default router;
