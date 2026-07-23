@@ -1,19 +1,50 @@
 import { Request, Response, NextFunction } from 'express';
 import { cmService } from '../services/cm.service';
+import { z } from 'zod';
+
+const webhookPayloadSchema = z.object({
+  action: z.enum(['book', 'modify', 'cancel']),
+  bookingId: z.string(),
+  channel: z.string(),
+  guest: z.object({
+    firstName: z.string(),
+    lastName: z.string(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    address: z.any().optional(),
+  }).optional(), // optional for cancel action
+  checkin: z.string().optional(),
+  checkout: z.string().optional(),
+  bookedOn: z.string().optional(),
+  rooms: z.array(z.object({
+    roomCode: z.string(),
+    rateplanCode: z.string(),
+    occupancy: z.object({
+      adults: z.number().optional(),
+      children: z.number().optional(),
+    }).optional(),
+  })).optional(),
+  amount: z.object({
+    amountAfterTax: z.number(),
+    tax: z.number(),
+    commission: z.number().optional(),
+  }).optional(),
+  pah: z.boolean().optional(),
+  specialRequests: z.string().optional().nullable(),
+});
 
 class CmController {
   async updateReservation(req: Request, res: Response, next: NextFunction) {
     try {
-      const payload = req.body;
-      
-      if (!payload || !payload.action) {
-        return res.status(400).json({ success: false, message: 'Invalid payload: missing action' });
-      }
+      const payload = webhookPayloadSchema.parse(req.body);
 
       await cmService.processReservation(payload);
       
       res.status(200).json({ success: true, message: 'Reservation Updated Successfully' });
     } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Invalid webhook payload', errors: error.issues });
+      }
       console.error('Webhook error:', error);
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }

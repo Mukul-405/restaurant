@@ -3,22 +3,22 @@ import { menuService } from '../services/menu.service';
 import { z } from 'zod';
 
 const bulkCategoriesSchema = z.object({
-  categories: z.array(z.string()).min(1),
+  categories: z.array(z.string().trim().min(1).max(100)).min(1).max(50),
 });
 
 const createMenuItemSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().trim().min(1).max(200),
   price: z.number().min(0),
-  description: z.string().optional(),
-  categoryName: z.string().min(1),
+  description: z.string().trim().max(500).optional(),
+  categoryName: z.string().trim().min(1).max(100),
 });
 
 const updateMenuItemSchema = z.object({
-  name: z.string().min(1).optional(),
+  name: z.string().trim().min(1).max(200).optional(),
   price: z.number().min(0).optional(),
-  description: z.string().optional(),
+  description: z.string().trim().max(500).optional(),
   isAvailable: z.boolean().optional(),
-  categoryName: z.string().min(1).optional(),
+  categoryName: z.string().trim().min(1).max(100).optional(),
 });
 
 export class MenuController {

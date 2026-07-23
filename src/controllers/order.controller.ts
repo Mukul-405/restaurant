@@ -7,31 +7,31 @@ import { OrderStatus } from '@prisma/client';
 const orderItemSchema = z.object({
   menuItemId: z.number().int().positive(),
   quantity: z.number().int().positive(),
-  name: z.string().min(1),
+  name: z.string().trim().min(1).max(200),
   price: z.number().min(0),
 });
 
 const createOrderSchema = z.object({
-  phoneNumber: z.string().min(10).max(15),
-  items: z.array(orderItemSchema).min(1),
+  phoneNumber: z.string().trim().min(10).max(15),
+  items: z.array(orderItemSchema).min(1).max(100),
   baseAmount: z.number().min(0),
   gstAmount: z.number().min(0),
   discountAmount: z.number().min(0).default(0),
   finalDiscountedAmount: z.number().min(0),
   tableNumber: z.number().int().positive().optional(),
-  kotHistory: z.array(z.object({ menuItemId: z.number(), name: z.string(), qty: z.number() })).optional(),
+  kotHistory: z.array(z.object({ menuItemId: z.number(), name: z.string().trim(), qty: z.number() })).max(500).optional(),
 });
 
 const updateOrderSchema = z.object({
   status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
-  cancellationReason: z.string().optional(),
-  items: z.array(orderItemSchema).min(1).optional(),
+  cancellationReason: z.string().trim().max(500).optional(),
+  items: z.array(orderItemSchema).min(1).max(100).optional(),
   baseAmount: z.number().min(0).optional(),
   gstAmount: z.number().min(0).optional(),
   discountAmount: z.number().min(0).optional(),
   finalDiscountedAmount: z.number().min(0).optional(),
   tableNumber: z.number().int().positive().optional(),
-  kotHistory: z.array(z.object({ menuItemId: z.number(), name: z.string(), qty: z.number() })).optional(),
+  kotHistory: z.array(z.object({ menuItemId: z.number(), name: z.string().trim(), qty: z.number() })).max(500).optional(),
 });
 
 const searchOrderSchema = z.object({

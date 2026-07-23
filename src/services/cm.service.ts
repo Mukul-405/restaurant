@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma';
+import { env } from '../config/env';
 
 class CmService {
   async processReservation(payload: any) {
@@ -66,11 +67,11 @@ class CmService {
 
 
   private async callAiosellApi(endpoint: string, payload: any) {
-    const username = process.env.AIOSELL_USERNAME || 'sandbox';
-    const password = process.env.AIOSELL_PASSWORD || 'sandbox123';
-    const pmsSlug = process.env.AIOSELL_PMS_SLUG || 'sample-pms';
+    const username = env.AIOSELL_USERNAME;
+    const password = env.AIOSELL_PASSWORD;
+    const pmsSlug = env.AIOSELL_PMS_SLUG;
     
-    payload.hotelCode = payload.hotelCode || process.env.AIOSELL_HOTEL_CODE || 'sandbox-pms';
+    payload.hotelCode = payload.hotelCode || env.AIOSELL_HOTEL_CODE;
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
     const response = await fetch(`https://live.aiosell.com/api/v2/cm/${endpoint}/${pmsSlug}`, {

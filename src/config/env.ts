@@ -8,6 +8,10 @@ const envSchema = z.object({
   JWT_SECRET: z.string(),
   JWT_REFRESH_SECRET: z.string(),
   PORT: z.string().default('8000'),
+  AIOSELL_USERNAME: z.string(),
+  AIOSELL_PASSWORD: z.string(),
+  AIOSELL_PMS_SLUG: z.string(),
+  AIOSELL_HOTEL_CODE: z.string(),
 });
 
 const _env = envSchema.safeParse(process.env);

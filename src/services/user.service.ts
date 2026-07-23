@@ -4,7 +4,7 @@ import { hashPassword } from '../utils/hash.util';
 import { Role } from '@prisma/client';
 
 export class UserService {
-  async createMember(data: { name: string; phoneNumber: string; password?: string; role: Role }) {
+  async createMember(data: { name: string; phoneNumber: string; password: string; role: Role }) {
 
 
     const existingUser = await userRepository.findByPhoneNumber(data.phoneNumber);
@@ -12,8 +12,7 @@ export class UserService {
       throw new Error('User with this phone number already exists');
     }
 
-    // Default password to '123456' if not provided
-    const passwordHash = await hashPassword(data.password || '123456');
+    const passwordHash = await hashPassword(data.password);
 
     const user = await userRepository.create({
       name: data.name,
