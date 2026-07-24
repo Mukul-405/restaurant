@@ -35,14 +35,14 @@ const updateOrderSchema = z.object({
 });
 
 const searchOrderSchema = z.object({
-  id: z.string().optional().transform(val => val ? parseInt(val) : undefined),
+  id: z.coerce.number().int().positive().optional(),
   phoneNumber: z.string().optional(),
   status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
   startDate: z.string().optional().transform(val => val ? new Date(val) : undefined),
   endDate: z.string().optional().transform(val => val ? new Date(val) : undefined),
   userId: z.string().optional(),
-  page: z.string().optional().default('1').transform(val => parseInt(val)),
-  limit: z.string().optional().default('10').transform(val => parseInt(val)),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
 export class OrderController {
@@ -59,22 +59,30 @@ export class OrderController {
     }
   }
 
-  async getOrderById(req: Request, res: Response, next: NextFunction) {
+  async getOrderById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
 
       const result = await orderService.getOrderById(id);
+      
+      if (req.user!.role !== 'ADMIN' && result.userId !== req.user!.id) {
+        return res.status(403).json({ message: 'Forbidden: You do not own this order' });
+      }
+
       res.status(200).json(result);
     } catch (error) {
       next(error);
     }
   }
 
-  async updateOrder(req: Request, res: Response, next: NextFunction) {
+  async updateOrder(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+
+      const existingOrder = await orderService.getOrderById(id);
+      if (req.user!.role !== 'ADMIN' && existingOrder.userId !== req.user!.id) {
+        return res.status(403).json({ message: 'Forbidden: You do not own this order' });
+      }
 
       const data = updateOrderSchema.parse(req.body);
       const result = await orderService.updateOrder(id, data);
@@ -99,10 +107,14 @@ export class OrderController {
       next(error);
     }
   }
-  async transferToRoom(req: Request, res: Response, next: NextFunction) {
+  async transferToRoom(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+
+      const existingOrder = await orderService.getOrderById(id);
+      if (req.user!.role !== 'ADMIN' && existingOrder.userId !== req.user!.id) {
+        return res.status(403).json({ message: 'Forbidden: You do not own this order' });
+      }
 
       const guestPhone = req.body.guestPhone;
       if (!guestPhone || typeof guestPhone !== 'string') {

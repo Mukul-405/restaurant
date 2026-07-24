@@ -1,10 +1,15 @@
 import { prisma } from '../config/prisma';
+import crypto from 'crypto';
 
 export class RefreshTokenRepository {
+  private hashToken(token: string): string {
+    return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
   async create(token: string, userId: string, expiresAt: Date) {
     return prisma.refreshToken.create({
       data: {
-        token,
+        token: this.hashToken(token),
         userId,
         expiresAt,
       },
@@ -13,14 +18,14 @@ export class RefreshTokenRepository {
 
   async findByToken(token: string) {
     return prisma.refreshToken.findUnique({
-      where: { token },
+      where: { token: this.hashToken(token) },
       include: { user: true },
     });
   }
 
   async deleteByToken(token: string) {
     return prisma.refreshToken.delete({
-      where: { token },
+      where: { token: this.hashToken(token) },
     });
   }
 

@@ -8,7 +8,7 @@ export class AuthService {
   async login(phoneNumber: string, password: string) {
     const user = await userRepository.findByPhoneNumber(phoneNumber);
     if (!user || !user.isActive) {
-      throw new Error('Invalid credentials or account is inactive');
+      throw new Error('Invalid credentials');
     }
 
     const isValidPassword = await comparePassword(password, user.passwordHash);
@@ -37,16 +37,16 @@ export class AuthService {
     
     const tokenRecord = await refreshTokenRepository.findByToken(token);
     if (!tokenRecord) {
-      throw new Error('Refresh token not found or already revoked');
+      throw new Error('Invalid credentials');
     }
 
     if (!tokenRecord.user.isActive) {
-      throw new Error('Invalid credentials or account is inactive');
+      throw new Error('Invalid credentials');
     }
 
     if (new Date() > tokenRecord.expiresAt) {
       await refreshTokenRepository.deleteByToken(token);
-      throw new Error('Refresh token expired');
+      throw new Error('Invalid credentials');
     }
 
     const payload = { id: tokenRecord.user.id, role: tokenRecord.user.role };

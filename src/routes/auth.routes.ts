@@ -1,13 +1,38 @@
 import { Router } from 'express';
 import { authController } from '../controllers/auth.controller';
-import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { authenticate, authorize, verifyOrigin } from '../middlewares/auth.middleware';
 import { userRepository } from '../repositories/user.repository';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
 
-router.post('/login', authController.login);
-router.post('/refresh-token', authController.refreshToken);
-router.post('/logout', authenticate, authController.logout);
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each account to 5 requests per 15 minutes
+  keyGenerator: (req) => {
+    // Normalize phone number (digits only) or fallback to IP
+    return req.body?.phoneNumber ? String(req.body.phoneNumber).replace(/\D/g, '') : req.ip || 'unknown';
+  },
+  message: { message: 'Too many login attempts, please try again' },
+  standardHeaders: true, 
+  legacyHeaders: false,
+});
+
+const refreshTokenRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyGenerator: (req) => {
+    // Rate limit by the refresh token itself to avoid blocking everyone on the hotel WiFi
+    return req.cookies?.refreshToken ? req.cookies.refreshToken : req.ip || 'unknown';
+  },
+  message: { message: 'Too many refresh token attempts' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post('/login', loginRateLimiter, authController.login);
+router.post('/refresh-token', verifyOrigin, refreshTokenRateLimiter, authController.refreshToken);
+router.post('/logout', verifyOrigin, authenticate, authController.logout);
 
 // Example protected route
 router.get('/me', authenticate, async (req, res, next) => {

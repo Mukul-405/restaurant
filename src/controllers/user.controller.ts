@@ -6,12 +6,12 @@ import { Role } from '@prisma/client';
 const createMemberSchema = z.object({
   name: z.string().trim().min(2).max(200),
   phoneNumber: z.string().trim().min(10).max(15),
-  password: z.string().min(6).max(128),
+  password: z.string().min(12).max(128),
   role: z.enum(Object.values(Role) as [string, ...string[]]),
 });
 
 const resetPasswordSchema = z.object({
-  password: z.string().min(6).max(128),
+  password: z.string().min(12).max(128),
 });
 
 export class UserController {

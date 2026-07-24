@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 const bookingSchema = z.object({
   guestName: z.string().trim().min(1, 'Guest name is required').max(200),
-  guestPhone: z.string().trim().min(1, 'Guest phone is required').max(20),
+  guestPhone: z.string().trim().regex(/^\+?\d+$/, 'Guest phone must contain only digits (optional + allowed)').max(20),
   guestEmail: z.string().email().optional().or(z.literal('')),
   checkIn: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid checkIn date format' }),
   checkOut: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid checkOut date format' }),
@@ -14,8 +14,8 @@ const bookingSchema = z.object({
   rooms: z.array(z.object({
     roomCode: z.string().trim(),
     rateplanCode: z.string().trim(),
-    adults: z.number().int(),
-    children: z.number().int(),
+    adults: z.number().int().min(1),
+    children: z.number().int().min(0),
     roomNumber: z.string().trim().optional().nullable()
   })).min(1, 'At least one room is required').max(50),
   source: z.enum(['DIRECT', 'OTA']).default('DIRECT')
@@ -42,8 +42,8 @@ export class BookingController {
 
   async getBookings(req: Request, res: Response, next: NextFunction) {
     try {
-      const { phone } = req.query;
-      const phoneStr = typeof phone === 'string' ? phone : undefined;
+      const phoneStr = z.string().regex(/^\+?\d+$/).max(20).optional().parse(req.query.phone);
+      
       const bookings = await bookingService.getBookingsByPhone(phoneStr);
       res.status(200).json(bookings);
     } catch (error) {
@@ -53,8 +53,7 @@ export class BookingController {
 
   async checkInBooking(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
       const { rooms } = req.body;
       if (!rooms || !Array.isArray(rooms)) {
         return res.status(400).json({ message: 'Rooms array is required for check-in' });
@@ -71,8 +70,7 @@ export class BookingController {
 
   async getBookingById(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
       const booking = await bookingService.getBookingById(id);
       res.status(200).json(booking);
     } catch (error: any) {
@@ -84,8 +82,7 @@ export class BookingController {
   }
   async checkOutBooking(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
       const booking = await bookingService.checkOutBooking(id);
       res.status(200).json({ message: 'Checked out successfully', booking });
     } catch (error: any) {
@@ -97,8 +94,7 @@ export class BookingController {
   }
   async editBookingRooms(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
       const { rooms } = req.body;
       if (!rooms || !Array.isArray(rooms)) {
         return res.status(400).json({ message: 'Rooms array is required for editing rooms' });

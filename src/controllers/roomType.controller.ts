@@ -22,6 +22,11 @@ const roomTypeSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+const addRoomSchema = z.object({
+  roomNumber: z.string().trim().min(1, 'Room number is required'),
+  status: z.string().trim().optional().default('no status'),
+});
+
 export class RoomTypeController {
   async createRoomType(req: Request, res: Response, next: NextFunction) {
     try {
@@ -49,8 +54,7 @@ export class RoomTypeController {
 
   async getRoomTypeById(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
       const roomType = await roomTypeService.getRoomTypeById(id);
       if (!roomType) return res.status(404).json({ message: 'Not found' });
       res.status(200).json(roomType);
@@ -59,8 +63,7 @@ export class RoomTypeController {
 
   async updateRoomType(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
       const data = roomTypeSchema.partial().parse(req.body);
       const roomType = await roomTypeService.updateRoomType(id, data as any);
       res.status(200).json({ message: 'Updated successfully', roomType });
@@ -69,14 +72,11 @@ export class RoomTypeController {
 
   async addRoom(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
-      // Expected body: { roomNumber: '101', status: 'no status', userRoomBookingId: '' }
-      const { roomNumber, status } = req.body;
-      if (!roomNumber) {
-        return res.status(400).json({ message: 'Room number is required' });
-      }
-      const roomType = await roomTypeService.addRoomToType(id, { roomNumber, status: status || 'no status' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+      
+      const { roomNumber, status } = addRoomSchema.parse(req.body);
+      
+      const roomType = await roomTypeService.addRoomToType(id, { roomNumber, status });
       res.status(200).json({ message: 'Room added successfully', roomType });
     } catch (error: any) { 
       if (error.message && (error.message.includes('already exists') || error.message.includes('Maximum limit'))) {
@@ -88,8 +88,7 @@ export class RoomTypeController {
 
   async deleteRoom(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
       const roomNumber = req.params.roomNumber as string;
       if (!roomNumber) {
         return res.status(400).json({ message: 'Room number is required' });
@@ -101,8 +100,7 @@ export class RoomTypeController {
 
   async deleteRoomType(req: Request, res: Response, next: NextFunction) {
     try {
-      const id = parseInt(req.params.id as string);
-      if (isNaN(id)) return res.status(400).json({ message: 'Invalid ID' });
+      const id = z.coerce.number().int().positive().parse(req.params.id);
       await roomTypeService.deleteRoomType(id);
       res.status(200).json({ message: 'Deleted successfully' });
     } catch (error) { next(error); }

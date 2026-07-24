@@ -7,7 +7,7 @@ import { Role } from '@prisma/client';
 
 const loginSchema = z.object({
   phoneNumber: z.string().trim().min(10).max(15),
-  password: z.string().min(6).max(128),
+  password: z.string().min(12).max(128),
 });
 
 export class AuthController {
