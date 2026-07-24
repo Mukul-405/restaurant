@@ -1,4 +1,5 @@
 import express from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import authRoutes from './routes/auth.routes';
@@ -13,6 +14,8 @@ import bookingRoutes from './routes/booking.routes';
 import cmRoutes from './routes/cm.routes';
 
 const app = express();
+app.set('trust proxy', 1);
+app.use(helmet());
 
 app.use(cors({
   origin: [

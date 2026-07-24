@@ -4,9 +4,10 @@ import { z } from 'zod';
 dotenv.config();
 
 const envSchema = z.object({
-  DATABASE_URL: z.string(),
-  JWT_SECRET: z.string(),
-  JWT_REFRESH_SECRET: z.string(),
+  DATABASE_URL: z.string().url(),
+  // Reject weak/placeholder signing keys at boot (32+ chars ~ 128 bits+).
+  JWT_SECRET: z.string().min(32),
+  JWT_REFRESH_SECRET: z.string().min(32),
   PORT: z.string().default('8000'),
   AIOSELL_USERNAME: z.string(),
   AIOSELL_PASSWORD: z.string(),
