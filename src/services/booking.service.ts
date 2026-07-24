@@ -84,13 +84,11 @@ export class BookingService {
   }
 
   async getBookingsByPhone(phone?: string) {
-    if (!phone) {
-      return prisma.userRoomBooking.findMany({
-        orderBy: { createdAt: 'desc' }
-      });
-    }
+    // No search term must never dump every booking. Require a phone.
+    const trimmed = phone?.trim();
+    if (!trimmed) return [];
     return prisma.userRoomBooking.findMany({
-      where: { guestPhone: { contains: phone } },
+      where: { guestPhone: { contains: trimmed } },
       orderBy: { createdAt: 'desc' }
     });
   }

@@ -24,7 +24,7 @@ export class RefreshTokenRepository {
   }
 
   async deleteByToken(token: string) {
-    return prisma.refreshToken.delete({
+    return prisma.refreshToken.deleteMany({
       where: { token: this.hashToken(token) },
     });
   }

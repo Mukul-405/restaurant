@@ -49,12 +49,20 @@ export class AuthService {
       throw new Error('Invalid credentials');
     }
 
+    // Atomic rotation: the delete IS the gate. Under two concurrent refreshes
+    // with the same token only one deletes the row (count=1) and may rotate;
+    // the loser (or any reuse of an already-rotated token) gets count=0, which
+    // signals possible theft -> revoke the whole session family.
+    const consumed = await refreshTokenRepository.deleteByToken(token);
+    if (consumed.count === 0) {
+      await refreshTokenRepository.deleteAllForUser(tokenRecord.user.id);
+      throw new Error('Invalid credentials');
+    }
+
     const payload = { id: tokenRecord.user.id, role: tokenRecord.user.role };
     const newAccessToken = generateAccessToken(payload);
     const newRefreshToken = generateRefreshToken(payload);
 
-    // Revoke old and create new
-    await refreshTokenRepository.deleteByToken(token);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 1);
     await refreshTokenRepository.create(newRefreshToken, tokenRecord.user.id, expiresAt);
