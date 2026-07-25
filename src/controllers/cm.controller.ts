@@ -90,8 +90,14 @@ class CmController {
       const payload = webhookPayloadSchema.parse(req.body);
 
       await cmService.processReservation(payload);
-      
-      res.status(200).json({ success: true, message: 'Reservation Updated Successfully' });
+
+      // Per-action message, matching the Aiosell docs exactly.
+      const messages = {
+        book: 'Reservation Updated Successfully',
+        modify: 'Reservation Modified Successfully',
+        cancel: 'Reservation Cancelled Successfully',
+      } as const;
+      res.status(200).json({ success: true, message: messages[payload.action] });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid webhook payload', errors: error.issues });
