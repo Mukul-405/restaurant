@@ -1,16 +1,18 @@
 import { Router } from 'express';
 import { bookingController } from '../controllers/booking.controller';
 import { authenticate } from '../middlewares/auth.middleware';
+import { readLimit, writeLimit } from '../middlewares/rateLimit.middleware';
 
 const router = Router();
 
 router.use(authenticate);
 
-router.post('/', bookingController.createBooking);
-router.get('/', bookingController.getBookings);
-router.get('/:id', bookingController.getBookingById);
-router.patch('/:id/check-in', bookingController.checkInBooking);
-router.patch('/:id/check-out', bookingController.checkOutBooking);
-router.patch('/:id/edit-rooms', bookingController.editBookingRooms);
+// Peak season: front desk fires many check-ins/check-outs per minute.
+router.post('/', writeLimit(60 * 1000, 60), bookingController.createBooking);
+router.get('/', readLimit(60 * 1000, 120), bookingController.getBookings);
+router.get('/:id', readLimit(60 * 1000, 120), bookingController.getBookingById);
+router.patch('/:id/check-in', writeLimit(60 * 1000, 60), bookingController.checkInBooking);
+router.patch('/:id/check-out', writeLimit(60 * 1000, 60), bookingController.checkOutBooking);
+router.patch('/:id/edit-rooms', writeLimit(60 * 1000, 60), bookingController.editBookingRooms);
 
 export default router;

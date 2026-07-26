@@ -1,14 +1,17 @@
 import { Router } from 'express';
 import { menuController } from '../controllers/menu.controller';
 import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { readLimit, writeLimit } from '../middlewares/rateLimit.middleware';
 
 const router = Router();
 
-// Authenticated/Authorized endpoints
-router.get('/', authenticate, menuController.getAllMenuItems);
-router.post('/categories/bulk', authenticate, authorize(['ADMIN']), menuController.createBulkCategories);
-router.post('/', authenticate, authorize(['ADMIN']), menuController.createMenuItem);
-router.patch('/:id', authenticate, authorize(['ADMIN']), menuController.updateMenuItem);
-router.delete('/:id', authenticate, authorize(['ADMIN']), menuController.deleteMenuItem);
+router.use(authenticate);
+
+// Menu is re-fetched on every order screen open, so reads get the order-side ceiling.
+router.get('/', readLimit(60 * 1000, 120), menuController.getAllMenuItems);
+router.post('/categories/bulk', authorize(['ADMIN']), writeLimit(), menuController.createBulkCategories);
+router.post('/', authorize(['ADMIN']), writeLimit(), menuController.createMenuItem);
+router.patch('/:id', authorize(['ADMIN']), writeLimit(), menuController.updateMenuItem);
+router.delete('/:id', authorize(['ADMIN']), writeLimit(), menuController.deleteMenuItem);
 
 export default router;

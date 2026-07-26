@@ -1,6 +1,7 @@
 import { orderRepository } from '../repositories/order.repository';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { normalizePhone } from '../utils/phone.util';
 
 interface OrderItem {
   menuItemId: number;
@@ -61,6 +62,7 @@ export class OrderService {
   async updateOrder(
     id: number,
     data: {
+      phoneNumber?: string | null;
       status?: OrderStatus;
       cancellationReason?: string;
       items?: OrderItem[];
@@ -76,6 +78,10 @@ export class OrderService {
 
     const existingOrder = await this.getOrderById(id);
 
+    // Checked against undefined, not truthiness: null and '' are valid "clear the phone".
+    if (data.phoneNumber !== undefined) {
+      updateData.phoneNumber = data.phoneNumber ? normalizePhone(data.phoneNumber) : null;
+    }
     if (data.status) updateData.status = data.status;
     if (data.cancellationReason) updateData.cancellationReason = data.cancellationReason;
     if (data.baseAmount !== undefined) updateData.baseAmount = data.baseAmount;

@@ -40,7 +40,7 @@ export class OrderRepository {
       where.id = query.id;
     }
     if (query.phoneNumber) {
-      where.phoneNumber = { contains: query.phoneNumber, mode: 'insensitive' };
+      where.phoneNumber = query.phoneNumber;
     }
     if (query.status) {
       where.status = query.status;
