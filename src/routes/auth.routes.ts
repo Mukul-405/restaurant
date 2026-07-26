@@ -48,6 +48,7 @@ router.get('/me', authenticate, async (req, res, next) => {
         id: dbUser.id,
         name: dbUser.name,
         role: dbUser.role,
+        permissions: dbUser.permissions,
         phoneNumber: dbUser.phoneNumber,
         isActive: dbUser.isActive
       } 

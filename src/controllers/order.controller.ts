@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { orderService } from '../services/order.service';
 import { z } from 'zod';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, Role } from '@prisma/client';
+
+// Data scoping, separate from the section permission: waiters see only their own
+// orders, the two admin roles see everyone's.
+const canSeeAllOrders = (role: string) => role === Role.ADMIN || role === Role.SUPERADMIN;
 
 const orderItemSchema = z.object({
   menuItemId: z.number().int().positive(),
@@ -72,7 +76,7 @@ export class OrderController {
 
       const result = await orderService.getOrderById(id);
       
-      if (req.user!.role !== 'ADMIN' && result.userId !== req.user!.id) {
+      if (!canSeeAllOrders(req.user!.role) && result.userId !== req.user!.id) {
         return res.status(403).json({ message: 'Forbidden: You do not own this order' });
       }
 
@@ -87,7 +91,7 @@ export class OrderController {
       const id = z.coerce.number().int().positive().parse(req.params.id);
 
       const existingOrder = await orderService.getOrderById(id);
-      if (req.user!.role !== 'ADMIN' && existingOrder.userId !== req.user!.id) {
+      if (!canSeeAllOrders(req.user!.role) && existingOrder.userId !== req.user!.id) {
         return res.status(403).json({ message: 'Forbidden: You do not own this order' });
       }
 
@@ -104,7 +108,7 @@ export class OrderController {
       const query = searchOrderSchema.parse(req.query);
       
       // Enforce isolation: Waiters can only see their own orders
-      if (req.user!.role !== 'ADMIN') {
+      if (!canSeeAllOrders(req.user!.role)) {
         query.userId = req.user!.id;
       }
 
@@ -129,7 +133,7 @@ export class OrderController {
       const id = z.coerce.number().int().positive().parse(req.params.id);
 
       const existingOrder = await orderService.getOrderById(id);
-      if (req.user!.role !== 'ADMIN' && existingOrder.userId !== req.user!.id) {
+      if (!canSeeAllOrders(req.user!.role) && existingOrder.userId !== req.user!.id) {
         return res.status(403).json({ message: 'Forbidden: You do not own this order' });
       }
 

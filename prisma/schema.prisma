@@ -8,6 +8,7 @@ generator client {
 }
 
 enum Role {
+  SUPERADMIN
   ADMIN
   MANAGER
   WAITER
@@ -16,12 +17,28 @@ enum Role {
   RECEPTIONIST
 }
 
+// One value per sidebar section. Names track the sidebar labels so the
+// "Can ..." checkboxes in Members map 1:1 onto what the user sees.
+enum Permission {
+  MANAGE_MEMBERS      // Members
+  MANAGE_MENU         // Menu
+  VIEW_ANALYSIS       // Analysis
+  PRINT_KOTS          // Print KOTs
+  MANAGE_ROOMS        // Manage Rooms
+  MANAGE_RESERVATIONS // Reservation
+  VIEW_ROOM_STATUS    // Room Status
+  MANAGE_ORDERS       // Orders
+}
+
 model User {
   id            String    @id @default(uuid())
   name          String
   phoneNumber   String    @unique
   passwordHash  String
   role          Role      @default(WAITER)
+  // Empty by default: every section is opt-in, including for ADMIN.
+  // SUPERADMIN ignores this list and passes everything.
+  permissions   Permission[] @default([])
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

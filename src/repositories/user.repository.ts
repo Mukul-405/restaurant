@@ -1,9 +1,20 @@
 import { prisma } from '../config/prisma';
-import { Role } from '@prisma/client';
+import { Permission, Role } from '@prisma/client';
 
 export class UserRepository {
-  async create(data: { name: string; phoneNumber: string; passwordHash: string; role?: Role; isActive?: boolean }) {
+  async create(data: {
+    name: string;
+    phoneNumber: string;
+    passwordHash: string;
+    role?: Role;
+    permissions?: Permission[];
+    isActive?: boolean;
+  }) {
     return prisma.user.create({ data });
+  }
+
+  async update(id: string, data: { name?: string; role?: Role; permissions?: Permission[] }) {
+    return prisma.user.update({ where: { id }, data });
   }
 
   async findByPhoneNumber(phoneNumber: string) {

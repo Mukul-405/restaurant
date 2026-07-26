@@ -1,11 +1,13 @@
 import { Router } from 'express';
 import { bookingController } from '../controllers/booking.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate, requirePermission } from '../middlewares/auth.middleware';
 import { readLimit, writeLimit } from '../middlewares/rateLimit.middleware';
+import { Permission } from '@prisma/client';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requirePermission(Permission.MANAGE_RESERVATIONS));
 
 // Peak season: front desk fires many check-ins/check-outs per minute.
 router.post('/', writeLimit(60 * 1000, 60), bookingController.createBooking);

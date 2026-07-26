@@ -1,13 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyAccessToken } from '../utils/jwt.util';
 import { prisma } from '../config/prisma';
+import { Permission, Role } from '@prisma/client';
 
 export interface AuthRequest extends Request {
   user?: {
     id: string;
     role: string;
+    permissions: Permission[];
   };
 }
+
+/** SUPERADMIN passes every gate. Everyone else, including ADMIN, needs the box ticked. */
+export const hasPermission = (
+  user: { role: string; permissions: Permission[] } | undefined,
+  permission: Permission,
+): boolean => {
+  if (!user) return false;
+  if (user.role === Role.SUPERADMIN) return true;
+  return user.permissions.includes(permission);
+};
 
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -25,7 +37,7 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       return res.status(401).json({ message: 'User is inactive or deleted' });
     }
 
-    req.user = payload;
+    req.user = { id: user.id, role: user.role, permissions: user.permissions };
     next();
   } catch (error) {
     next(error);
@@ -37,11 +49,26 @@ export const authorize = (roles: string[]) => {
     if (!req.user) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
-    
+
     if (!roles.includes(req.user.role)) {
       return res.status(403).json({ message: 'Forbidden: Insufficient permissions' });
     }
-    
+
+    next();
+  };
+};
+
+/** Gate a route on a sidebar-section permission. Must run after `authenticate`. */
+export const requirePermission = (permission: Permission) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    if (!hasPermission(req.user, permission)) {
+      return res.status(403).json({ message: 'Forbidden: Insufficient permissions' });
+    }
+
     next();
   };
 };

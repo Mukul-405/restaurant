@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { getRevenueAnalysis, getWaiterAnalysis, getBookingAnalysis, getChannelAnalysis } from '../controllers/analysis.controller';
-import { authenticate, authorize } from '../middlewares/auth.middleware';
+import { authenticate, requirePermission } from '../middlewares/auth.middleware';
 import { readLimit } from '../middlewares/rateLimit.middleware';
+import { Permission } from '@prisma/client';
 
 const router = Router();
 
-// Only ADMIN can access analysis routes
 router.use(authenticate);
-router.use(authorize(['ADMIN']));
+router.use(requirePermission(Permission.VIEW_ANALYSIS));
 
 router.get('/revenue', readLimit(), getRevenueAnalysis);
 router.get('/waiter', readLimit(), getWaiterAnalysis);

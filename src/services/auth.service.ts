@@ -30,7 +30,9 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: { id: user.id, name: user.name, role: user.role },
+      // Permissions ride in the response body, not the JWT: the frontend needs
+      // them to build the sidebar, and every API gate re-reads them from the DB.
+      user: { id: user.id, name: user.name, role: user.role, permissions: user.permissions },
     };
   }
 
