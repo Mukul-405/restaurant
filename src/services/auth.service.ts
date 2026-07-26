@@ -19,6 +19,8 @@ export class AuthService {
     const payload = { id: user.id, role: user.role };
     const accessToken = generateAccessToken(payload);
     const refreshToken = generateRefreshToken(payload);
+    
+    await refreshTokenRepository.deleteExpiredForUser(user.id);
 
     // Save refresh token in DB (expires in 1 day)
     const expiresAt = new Date();

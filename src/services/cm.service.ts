@@ -1,5 +1,6 @@
 import { prisma } from '../config/prisma';
 import { env } from '../config/env';
+import { normalizePhone } from '../utils/phone.util';
 
 class CmService {
   async processReservation(payload: any) {
@@ -8,27 +9,24 @@ class CmService {
       throw new Error(`Unsupported action: ${action}`);
     }
 
-    const existing = await prisma.userRoomBooking.findFirst({
-      where: { bookingId, channel }
-    });
-
     if (action === 'cancel') {
-      if (existing) {
-        await prisma.userRoomBooking.update({
-          where: { id: existing.id },
-          data: { status: 'CANCELLED' as any }
-        });
-      }
+      await prisma.userRoomBooking.updateMany({
+        where: { bookingId, channel },
+        data: { status: 'CANCELLED' as any }
+      });
       return;
     }
 
     const data = this.mapPayloadToDbFields(payload);
-    
-    if (existing) {
-      await prisma.userRoomBooking.update({ where: { id: existing.id }, data });
-    } else {
-      await prisma.userRoomBooking.create({ data });
-    }
+
+    // Single atomic statement. A read-then-write would let two concurrent
+    // deliveries of the same booking both see "not found" and both insert.
+    // 'modify' is a full replace per the Aiosell contract, so update === create.
+    await prisma.userRoomBooking.upsert({
+      where: { channel_bookingId: { channel, bookingId } },
+      update: data,
+      create: data,
+    });
   }
 
   private mapPayloadToDbFields(payload: any) {
@@ -40,7 +38,7 @@ class CmService {
       channel: payload.channel,
       guestName: `${payload.guest.firstName} ${payload.guest.lastName}`.trim(),
       guestEmail: payload.guest.email,
-      guestPhone: payload.guest.phone || 'N/A', // fallback if empty
+      guestPhone: payload.guest.phone ? normalizePhone(payload.guest.phone) : 'N/A', // fallback if empty
       guestAddress: payload.guest.address || {},
       checkIn: new Date(payload.checkin),
       checkOut: new Date(payload.checkout),

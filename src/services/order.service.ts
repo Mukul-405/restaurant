@@ -161,6 +161,23 @@ export class OrderService {
       }
     };
   }
+  async getKots(query: { page?: number; limit?: number }) {
+    const page = query.page || 1;
+    const limit = query.limit || 20;
+
+    const { total, data } = await orderRepository.findKots({ page, limit });
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      }
+    };
+  }
+
   async transferToRoom(orderId: number, guestPhone: string) {
     const order = await this.getOrderById(orderId);
     if (!order) throw new Error('Order not found');

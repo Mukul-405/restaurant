@@ -34,6 +34,15 @@ export class RefreshTokenRepository {
       where: { userId },
     });
   }
+
+  // ponytail: per-user sweep on login, uses the existing userId index. If
+  // abandoned sessions ever outpace logins, move to a scheduled global sweep
+  // and add @@index([expiresAt]) then.
+  async deleteExpiredForUser(userId: string) {
+    return prisma.refreshToken.deleteMany({
+      where: { userId, expiresAt: { lt: new Date() } },
+    });
+  }
 }
 
 export const refreshTokenRepository = new RefreshTokenRepository();

@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { bookingService } from '../services/booking.service';
+import { normalizePhone } from '../utils/phone.util';
 import { z } from 'zod';
 
 const bookingSchema = z.object({
   guestName: z.string().trim().min(1, 'Guest name is required').max(200),
-  guestPhone: z.string().trim().regex(/^\+?\d+$/, 'Guest phone must contain only digits (optional + allowed)').max(20),
+  guestPhone: z.string().trim().regex(/^\+?\d+$/, 'Guest phone must contain only digits (optional + allowed)').max(20).transform(normalizePhone),
   guestEmail: z.string().email().optional().or(z.literal('')),
   checkIn: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid checkIn date format' }),
   checkOut: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid checkOut date format' }),
@@ -42,7 +43,7 @@ export class BookingController {
 
   async getBookings(req: Request, res: Response, next: NextFunction) {
     try {
-      const phoneStr = z.string().regex(/^\+?\d+$/).max(20).optional().parse(req.query.phone);
+      const phoneStr = z.string().regex(/^\+?\d+$/).max(20).optional().transform(v => v ? normalizePhone(v) : v).parse(req.query.phone);
       
       const bookings = await bookingService.getBookingsByPhone(phoneStr);
       res.status(200).json(bookings);

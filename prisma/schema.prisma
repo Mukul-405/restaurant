@@ -28,8 +28,6 @@ model User {
 
   refreshTokens RefreshToken[]
   Order         Order[]
-
-  @@index([phoneNumber])
 }
 
 model RefreshToken {
@@ -94,7 +92,6 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([phoneNumber])
   @@index([status, createdAt(sort: Desc)])
   @@index([userId, status, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
@@ -116,8 +113,6 @@ model RoomType {
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-
-  @@index([isActive])
 }
 
 enum BookingStatus {
@@ -179,10 +174,9 @@ model UserRoomBooking {
   createdAt          DateTime       @default(now())
   updatedAt          DateTime       @updatedAt
 
-  @@index([channel, bookingId])
-  @@index([status])
+  // Aiosell may deliver the same webhook twice; the constraint (not app code)
+  // is what makes book/modify idempotent.
+  @@unique([channel, bookingId])
   @@index([guestPhone])
-  @@index([source])
-  @@index([checkIn, checkOut])
   @@index([createdAt(sort: Desc)])
 }

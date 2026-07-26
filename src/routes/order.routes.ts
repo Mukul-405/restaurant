@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { orderController } from '../controllers/order.controller';
-import { authenticate } from '../middlewares/auth.middleware';
+import { authenticate, authorize } from '../middlewares/auth.middleware';
 
 const router = Router();
 
@@ -10,6 +10,8 @@ router.use(authenticate);
 
 router.post('/', orderController.createOrder);
 router.get('/', orderController.searchOrders);
+// Must stay above '/:id', otherwise 'kots' is parsed as an order id.
+router.get('/kots', authorize(['ADMIN']), orderController.getKots);
 router.get('/:id', orderController.getOrderById);
 router.post('/:id/transfer-to-room', orderController.transferToRoom);
 router.put('/:id', orderController.updateOrder);

@@ -3,6 +3,13 @@ import crypto from 'crypto';
 import { roomTypeService } from './roomType.service';
 import { cmService } from './cm.service';
 
+const BOOKING_ID_HEX_LEN = 12; // 48 random bits (UUID's first 12 hex chars, no fixed version nibble in range)
+const MAX_BOOKING_ID_ATTEMPTS = 5;
+
+function generateBookingId(): string {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, BOOKING_ID_HEX_LEN).toUpperCase();
+}
+
 export class BookingService {
 
   async createBooking(data: any) {
@@ -43,26 +50,37 @@ export class BookingService {
       }
     }
 
-    // Second pass: Create Booking and nested BookingRooms
-    const booking = await prisma.userRoomBooking.create({
-      data: {
-        bookingId: crypto.randomUUID().split('-')[0].toUpperCase(),
-        guestName: data.guestName,
-        guestEmail: data.guestEmail,
-        guestPhone: data.guestPhone,
-        checkIn: checkInDate,
-        checkOut: checkOutDate,
-        specialRequests: data.specialRequests,
-        source: data.source,
-        channel: 'Sunrise Resorts',
-        paymentStatus: 'PENDING',
-        payAtHotel: true,
-        status: 'RESERVED' as any,
-        totalAmount: totalAmount,
-        bookedOn: new Date(),
-        rooms: data.rooms
+    // Second pass: Create Booking and nested BookingRooms.
+    // bookingId collides at random (48 bits, not zero); on that one-in-a-
+    // trillion event, regenerate and retry rather than fail the guest's booking.
+    let booking;
+    for (let attempt = 1; ; attempt++) {
+      try {
+        booking = await prisma.userRoomBooking.create({
+          data: {
+            bookingId: generateBookingId(),
+            guestName: data.guestName,
+            guestEmail: data.guestEmail,
+            guestPhone: data.guestPhone,
+            checkIn: checkInDate,
+            checkOut: checkOutDate,
+            specialRequests: data.specialRequests,
+            source: data.source,
+            channel: 'Sunrise Resorts',
+            paymentStatus: 'PENDING',
+            payAtHotel: true,
+            status: 'RESERVED' as any,
+            totalAmount: totalAmount,
+            bookedOn: new Date(),
+            rooms: data.rooms
+          }
+        });
+        break;
+      } catch (err: any) {
+        if (err.code === 'P2002' && attempt < MAX_BOOKING_ID_ATTEMPTS) continue;
+        throw err;
       }
-    });
+    }
 
     // Push updated inventory to Aiosell to prevent double booking race condition
     try {
@@ -88,7 +106,7 @@ export class BookingService {
     const trimmed = phone?.trim();
     if (!trimmed) return [];
     return prisma.userRoomBooking.findMany({
-      where: { guestPhone: { contains: trimmed } },
+      where: { guestPhone: trimmed },
       orderBy: { createdAt: 'desc' }
     });
   }

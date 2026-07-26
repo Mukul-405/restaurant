@@ -45,6 +45,11 @@ const searchOrderSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
+const kotQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export class OrderController {
   async createOrder(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -107,6 +112,16 @@ export class OrderController {
       next(error);
     }
   }
+  async getKots(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const query = kotQuerySchema.parse(req.query);
+      const result = await orderService.getKots(query);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async transferToRoom(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
