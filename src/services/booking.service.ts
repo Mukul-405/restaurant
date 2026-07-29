@@ -93,9 +93,8 @@ export class BookingService {
         }))
       }];
       // Fire and forget so we don't hold up the client if Aiosell is slow
-      cmService.pushInventory(updates).catch(e => console.error("Aiosell push error:", e));
+      cmService.pushInventory(updates).catch(() => {});
     } catch (err) {
-      console.error("Failed to prepare Aiosell push:", err);
     }
 
     return booking;

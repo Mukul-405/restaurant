@@ -46,7 +46,6 @@ export class RoomTypeService {
 
       return availabilityMap;
     } catch (error) {
-      console.error("Error fetching inventory from Aiosell:", error);
       throw error;
     }
   }

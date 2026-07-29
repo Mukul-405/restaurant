@@ -102,7 +102,7 @@ class CmController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid webhook payload', errors: error.issues });
       }
-      console.error('Webhook error:', error);
+
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -117,7 +117,7 @@ class CmController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: error.issues });
       }
-      console.error('Fetch Inventory error:', error);
+
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -132,7 +132,7 @@ class CmController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: error.issues });
       }
-      console.error('Fetch Rates error:', error);
+
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -147,7 +147,7 @@ class CmController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: error.issues });
       }
-      console.error('Fetch Reservations error:', error);
+
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -161,7 +161,7 @@ class CmController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid push payload', errors: error.issues });
       }
-      console.error('Push Inventory error:', error);
+
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -176,7 +176,7 @@ class CmController {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid push payload', errors: error.issues });
       }
-      console.error('Push Rates error:', error);
+
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
