@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { cmService } from '../services/cm.service';
 import { z } from 'zod';
+import { logger } from '../config/logger';
 
 const baseWebhookSchema = z.object({
   bookingId: z.string(),
@@ -97,12 +98,14 @@ class CmController {
         modify: 'Reservation Modified Successfully',
         cancel: 'Reservation Cancelled Successfully',
       } as const;
+      logger.info({ bookingId: payload.bookingId, action: payload.action }, 'CM reservation processed');
       res.status(200).json({ success: true, message: messages[payload.action] });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid webhook payload', errors: error.issues });
       }
 
+      logger.error({ err: error }, 'Failed to process CM reservation');
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -118,6 +121,7 @@ class CmController {
         return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: error.issues });
       }
 
+      logger.error({ err: error }, 'Failed to fetch CM inventory');
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -133,6 +137,7 @@ class CmController {
         return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: error.issues });
       }
 
+      logger.error({ err: error }, 'Failed to fetch CM rates');
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -148,6 +153,7 @@ class CmController {
         return res.status(400).json({ success: false, message: 'Invalid query parameters', errors: error.issues });
       }
 
+      logger.error({ err: error }, 'Failed to fetch CM reservations');
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -156,12 +162,14 @@ class CmController {
       const { updates, toChannels } = inventoryPushSchema.parse(req.body);
 
       const data = await cmService.pushInventory(updates, toChannels);
+      logger.info({ toChannels }, 'CM inventory pushed');
       res.status(200).json({ success: true, data });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid push payload', errors: error.issues });
       }
 
+      logger.error({ err: error }, 'Failed to push CM inventory');
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }
@@ -171,12 +179,14 @@ class CmController {
       const { updates, toChannels } = ratesPushSchema.parse(req.body);
 
       const data = await cmService.pushRates(updates, toChannels);
+      logger.info({ toChannels }, 'CM rates pushed');
       res.status(200).json({ success: true, data });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ success: false, message: 'Invalid push payload', errors: error.issues });
       }
 
+      logger.error({ err: error }, 'Failed to push CM rates');
       res.status(500).json({ success: false, message: error.message || 'Internal Server Error' });
     }
   }

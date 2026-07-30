@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { bookingService } from '../services/booking.service';
 import { normalizePhone } from '../utils/phone.util';
 import { z } from 'zod';
+import { logger } from '../config/logger';
 
 const bookingSchema = z.object({
   guestName: z.string().trim().min(1, 'Guest name is required').max(200),
@@ -28,7 +29,8 @@ export class BookingController {
       const data = bookingSchema.parse(req.body);
       
       const booking = await bookingService.createBooking(data as any);
-      
+
+      logger.info({ bookingId: booking.id }, 'Booking created');
       res.status(201).json({ message: 'Booking created successfully', booking });
     } catch (error: any) {
       if (error instanceof z.ZodError) {
@@ -37,6 +39,7 @@ export class BookingController {
       if (error.message && (error.message.includes('already booked') || error.message.includes('not exist') || error.message.includes('not available'))) {
         return res.status(400).json({ message: error.message });
       }
+      logger.error({ err: error }, 'Failed to create booking');
       next(error);
     }
   }
@@ -44,10 +47,11 @@ export class BookingController {
   async getBookings(req: Request, res: Response, next: NextFunction) {
     try {
       const phoneStr = z.string().regex(/^\+?\d+$/).max(20).optional().transform(v => v ? normalizePhone(v) : v).parse(req.query.phone);
-      
+
       const bookings = await bookingService.getBookingsByPhone(phoneStr);
       res.status(200).json(bookings);
     } catch (error) {
+      logger.error({ err: error }, 'Failed to get bookings');
       next(error);
     }
   }
@@ -60,11 +64,13 @@ export class BookingController {
         return res.status(400).json({ message: 'Rooms array is required for check-in' });
       }
       const booking = await bookingService.checkInBooking(id, rooms);
+      logger.info({ bookingId: id }, 'Booking checked in');
       res.status(200).json({ message: 'Checked in successfully', booking });
     } catch (error: any) {
       if (error.message && (error.message.includes('not found') || error.message.includes('not available') || error.message.includes('status'))) {
         return res.status(400).json({ message: error.message });
       }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to check in booking');
       next(error);
     }
   }
@@ -78,6 +84,7 @@ export class BookingController {
       if (error.message && error.message.includes('not found')) {
         return res.status(404).json({ message: error.message });
       }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to get booking');
       next(error);
     }
   }
@@ -85,11 +92,13 @@ export class BookingController {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
       const booking = await bookingService.checkOutBooking(id);
+      logger.info({ bookingId: id }, 'Booking checked out');
       res.status(200).json({ message: 'Checked out successfully', booking });
     } catch (error: any) {
       if (error.message && (error.message.includes('not found') || error.message.includes('status'))) {
         return res.status(400).json({ message: error.message });
       }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to check out booking');
       next(error);
     }
   }
@@ -101,11 +110,13 @@ export class BookingController {
         return res.status(400).json({ message: 'Rooms array is required for editing rooms' });
       }
       const booking = await bookingService.editBookingRooms(id, rooms);
+      logger.info({ bookingId: id }, 'Booking rooms edited');
       res.status(200).json({ message: 'Rooms edited successfully', booking });
     } catch (error: any) {
       if (error.message && (error.message.includes('not found') || error.message.includes('status') || error.message.includes('occupied') || error.message.includes('exist'))) {
         return res.status(400).json({ message: error.message });
       }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to edit booking rooms');
       next(error);
     }
   }

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { roomTypeService } from '../services/roomType.service';
 import { z } from 'zod';
+import { logger } from '../config/logger';
 
 const roomTypeSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -32,15 +33,22 @@ export class RoomTypeController {
     try {
       const data = roomTypeSchema.parse(req.body);
       const roomType = await roomTypeService.createRoomType(data as any);
+      logger.info({ roomTypeId: roomType.id }, 'Room type created');
       res.status(201).json({ message: 'Room type created', roomType });
-    } catch (error) { next(error); }
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to create room type');
+      next(error);
+    }
   }
 
   async getAllRoomTypes(req: Request, res: Response, next: NextFunction) {
     try {
       const roomTypes = await roomTypeService.getAllRoomTypes();
       res.status(200).json(roomTypes);
-    } catch (error) { next(error); }
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to get room types');
+      next(error);
+    }
   }
 
   async getAvailability(req: Request, res: Response, next: NextFunction) {
@@ -49,7 +57,10 @@ export class RoomTypeController {
       if (!startDate || !endDate) return res.status(400).json({ message: "startDate and endDate are required" });
       const availability = await roomTypeService.getAvailability(startDate as string, endDate as string);
       res.status(200).json(availability);
-    } catch (error) { next(error); }
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to get room availability');
+      next(error);
+    }
   }
 
   async getRoomTypeById(req: Request, res: Response, next: NextFunction) {
@@ -58,7 +69,10 @@ export class RoomTypeController {
       const roomType = await roomTypeService.getRoomTypeById(id);
       if (!roomType) return res.status(404).json({ message: 'Not found' });
       res.status(200).json(roomType);
-    } catch (error) { next(error); }
+    } catch (error) {
+      logger.error({ err: error, roomTypeId: req.params.id }, 'Failed to get room type');
+      next(error);
+    }
   }
 
   async updateRoomType(req: Request, res: Response, next: NextFunction) {
@@ -66,23 +80,29 @@ export class RoomTypeController {
       const id = z.coerce.number().int().positive().parse(req.params.id);
       const data = roomTypeSchema.partial().parse(req.body);
       const roomType = await roomTypeService.updateRoomType(id, data as any);
+      logger.info({ roomTypeId: id }, 'Room type updated');
       res.status(200).json({ message: 'Updated successfully', roomType });
-    } catch (error) { next(error); }
+    } catch (error) {
+      logger.error({ err: error, roomTypeId: req.params.id }, 'Failed to update room type');
+      next(error);
+    }
   }
 
   async addRoom(req: Request, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-      
+
       const { roomNumber, status } = addRoomSchema.parse(req.body);
-      
+
       const roomType = await roomTypeService.addRoomToType(id, { roomNumber, status });
+      logger.info({ roomTypeId: id, roomNumber }, 'Room added to room type');
       res.status(200).json({ message: 'Room added successfully', roomType });
-    } catch (error: any) { 
+    } catch (error: any) {
       if (error.message && (error.message.includes('already exists') || error.message.includes('Maximum limit'))) {
         return res.status(400).json({ message: error.message });
       }
-      next(error); 
+      logger.error({ err: error, roomTypeId: req.params.id }, 'Failed to add room to room type');
+      next(error);
     }
   }
 
@@ -94,16 +114,24 @@ export class RoomTypeController {
         return res.status(400).json({ message: 'Room number is required' });
       }
       const roomType = await roomTypeService.deleteRoomFromType(id, roomNumber);
+      logger.info({ roomTypeId: id, roomNumber }, 'Room deleted from room type');
       res.status(200).json({ message: 'Room deleted successfully', roomType });
-    } catch (error) { next(error); }
+    } catch (error) {
+      logger.error({ err: error, roomTypeId: req.params.id }, 'Failed to delete room from room type');
+      next(error);
+    }
   }
 
   async deleteRoomType(req: Request, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
       await roomTypeService.deleteRoomType(id);
+      logger.info({ roomTypeId: id }, 'Room type deleted');
       res.status(200).json({ message: 'Deleted successfully' });
-    } catch (error) { next(error); }
+    } catch (error) {
+      logger.error({ err: error, roomTypeId: req.params.id }, 'Failed to delete room type');
+      next(error);
+    }
   }
 }
 

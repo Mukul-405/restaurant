@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service';
 import { z } from 'zod';
 import { Role } from '@prisma/client';
+import { logger } from '../config/logger';
 
 
 
@@ -23,11 +24,14 @@ export class AuthController {
         maxAge: 24 * 60 * 60 * 1000 // 1 day
       });
 
+      logger.info({ userId: result.user.id }, 'User logged in');
       res.status(200).json({ accessToken: result.accessToken, user: result.user });
     } catch (error) {
       if (error instanceof Error && error.message.includes('Invalid credentials')) {
+        logger.warn('Login failed: invalid credentials');
         return res.status(401).json({ message: error.message });
       }
+      logger.error({ err: error }, 'Login failed');
       next(error);
     }
   }
@@ -52,6 +56,7 @@ export class AuthController {
       if (error instanceof Error && (error.message.includes('expired') || error.message.includes('not found'))) {
         return res.status(401).json({ message: error.message });
       }
+      logger.error({ err: error }, 'Token refresh failed');
       next(error);
     }
   }
@@ -67,8 +72,10 @@ export class AuthController {
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       });
+      logger.info('User logged out');
       res.status(200).json({ message: 'Logged out successfully' });
     } catch (error) {
+      logger.error({ err: error }, 'Logout failed');
       next(error);
     }
   }

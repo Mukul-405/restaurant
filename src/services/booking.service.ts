@@ -2,6 +2,7 @@ import { prisma } from '../config/prisma';
 import crypto from 'crypto';
 import { roomTypeService } from './roomType.service';
 import { cmService } from './cm.service';
+import { logger } from '../config/logger';
 
 const BOOKING_ID_HEX_LEN = 12; // 48 random bits (UUID's first 12 hex chars, no fixed version nibble in range)
 const MAX_BOOKING_ID_ATTEMPTS = 5;
@@ -14,13 +15,13 @@ export class BookingService {
 
   async createBooking(data: any) {
     let totalAmount = 0;
-    
+
     const checkInDate = new Date(data.checkIn);
     const checkOutDate = new Date(data.checkOut);
 
     // Fetch dynamic availability to validate
     const availability = await roomTypeService.getAvailability(data.checkIn, data.checkOut);
-    
+
     // Fetch unique room types once to avoid N+1 queries
     const uniqueRoomCodes = [...new Set(data.rooms.map((r: any) => r.roomCode))] as string[];
     const roomTypes = await prisma.roomType.findMany({
@@ -33,13 +34,13 @@ export class BookingService {
     for (const room of data.rooms) {
       const roomType = roomTypeMap[room.roomCode];
       if (!roomType) throw new Error(`RoomType ${room.roomCode} not found`);
-      
+
       if (roomType.rateplanCodes) {
         const ratePlans = roomType.rateplanCodes as any[];
         const plan = ratePlans.find(rp => rp.code === room.rateplanCode);
         if (plan) totalAmount += Number(plan.price);
       }
-      
+
       requestedCounts[room.roomCode] = (requestedCounts[room.roomCode] || 0) + 1;
     }
 
@@ -93,7 +94,7 @@ export class BookingService {
         }))
       }];
       // Fire and forget so we don't hold up the client if Aiosell is slow
-      cmService.pushInventory(updates).catch(() => {});
+      cmService.pushInventory(updates).catch(() => { });
     } catch (err) {
     }
 
@@ -131,7 +132,7 @@ export class BookingService {
       const uniqueRoomCodes = [...new Set(assignments.map(a => a.roomCode))] as string[];
       const roomTypes = await tx.roomType.findMany({ where: { roomCode: { in: uniqueRoomCodes } } });
       const roomUpdates: Record<string, any[]> = Object.fromEntries(roomTypes.map(rt => [rt.roomCode, (rt.rooms as any[]) || []]));
-      
+
       for (const assignment of assignments) {
         if (!roomUpdates[assignment.roomCode]) {
           throw new Error(`RoomType ${assignment.roomCode} not found`);
@@ -139,11 +140,11 @@ export class BookingService {
 
         const physicalRooms = roomUpdates[assignment.roomCode];
         const roomIndex = physicalRooms.findIndex(r => r.roomNumber === assignment.roomNumber);
-        
+
         if (roomIndex === -1) {
           throw new Error(`Physical room ${assignment.roomNumber} does not exist in type ${assignment.roomCode}`);
         }
-        
+
         if (physicalRooms[roomIndex].status !== 'no status') {
           throw new Error(`Room ${assignment.roomNumber} is currently occupied or unavailable (status: ${physicalRooms[roomIndex].status})`);
         }
@@ -188,7 +189,9 @@ export class BookingService {
   }
 
   async checkOutBooking(id: number) {
-    return prisma.$transaction(async (tx) => {
+    const physicalTotals: Record<string, number> = {};
+
+    const updatedBooking = await prisma.$transaction(async (tx) => {
       const booking = await tx.userRoomBooking.findUnique({
         where: { id }
       });
@@ -205,6 +208,7 @@ export class BookingService {
         if (roomType && roomType.rooms) {
           const roomCode = roomType.roomCode;
           const physicalRooms = roomType.rooms as any[];
+          physicalTotals[roomCode] = physicalRooms.length;
           let updated = false;
 
           for (const room of physicalRooms) {
@@ -224,13 +228,74 @@ export class BookingService {
         }
       }
 
-      const updatedBooking = await tx.userRoomBooking.update({
+      const updated = await tx.userRoomBooking.update({
         where: { id },
         data: { status: 'CHECKED_OUT' }
       });
 
-      return updatedBooking;
+      return updated;
     });
+
+    this.releaseEarlyCheckoutInventory(updatedBooking, physicalTotals).catch((err) => {
+      logger.error({ err, bookingId: id }, 'Failed to release early checkout inventory');
+    });
+
+    return updatedBooking;
+  }
+
+  private async releaseEarlyCheckoutInventory(
+    booking: any,
+    physicalTotals: Record<string, number>
+  ) {
+    // Format dates to IST explicitly
+    const toYMD_IST = (d: Date) => {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(d);
+      
+      const year = parts.find(p => p.type === 'year')?.value;
+      const month = parts.find(p => p.type === 'month')?.value;
+      const day = parts.find(p => p.type === 'day')?.value;
+      
+      return `${year}-${month}-${day}`;
+    };
+
+    const today = new Date();
+    const checkOut = new Date(booking.checkOut);
+    
+    const startDateStr = toYMD_IST(today);
+    const checkOutDateStr = toYMD_IST(checkOut);
+    
+    // Not an early checkout -> no future nights freed.
+    if (startDateStr >= checkOutDateStr) return;
+
+    // Count how many rooms of each type this booking frees.
+    const freedCounts: Record<string, number> = {};
+    for (const r of (booking.rooms as any[]) || []) {
+      if (r.roomCode) freedCounts[r.roomCode] = (freedCounts[r.roomCode] || 0) + 1;
+    }
+    if (Object.keys(freedCounts).length === 0) return;
+
+    const startDate = startDateStr;
+    // End date is one day before checkout (checkout date itself is not a night stayed)
+    const checkOutMinusOne = new Date(checkOut.getTime() - 24 * 60 * 60 * 1000);
+    const endDate = toYMD_IST(checkOutMinusOne);
+
+    // ponytail: reuses the min-across-range availability pattern from createBooking;
+    // a per-date push would be exact but Aiosell inventory pushes are range upserts
+    // and the create path already accepts this approximation. Upgrade to per-date if
+    // availability varies materially within the freed window.
+    const availability = await roomTypeService.getAvailability(startDate, endDate);
+    const rooms = Object.keys(freedCounts).map(roomCode => {
+      const current = availability[roomCode] ?? 0;
+      const cap = physicalTotals[roomCode] ?? current + freedCounts[roomCode];
+      return { roomCode, available: Math.min(current + freedCounts[roomCode], cap) };
+    });
+
+    await cmService.pushInventory([{ startDate, endDate, rooms }]);
   }
 
   async editBookingRooms(id: number, assignments: { roomCode: string, roomNumber: string }[]) {
@@ -248,7 +313,7 @@ export class BookingService {
       const oldRoomCodes = Array.from(new Set(bookingRooms.map(r => r.roomCode).filter(Boolean))) as string[];
       const newRoomCodes = Array.from(new Set(assignments.map(a => a.roomCode))) as string[];
       const allRoomCodes = Array.from(new Set([...oldRoomCodes, ...newRoomCodes]));
-      
+
       const roomTypes = await tx.roomType.findMany({ where: { roomCode: { in: allRoomCodes } } });
       const roomUpdates: Record<string, any[]> = Object.fromEntries(roomTypes.map(rt => [rt.roomCode, (rt.rooms as any[]) || []]));
 
@@ -272,11 +337,11 @@ export class BookingService {
 
         const physicalRooms = roomUpdates[assignment.roomCode];
         const roomIndex = physicalRooms.findIndex(r => r.roomNumber === assignment.roomNumber);
-        
+
         if (roomIndex === -1) {
           throw new Error(`Physical room ${assignment.roomNumber} does not exist in type ${assignment.roomCode}`);
         }
-        
+
         if (physicalRooms[roomIndex].status !== 'no status') {
           throw new Error(`Room ${assignment.roomNumber} is currently occupied or unavailable (status: ${physicalRooms[roomIndex].status})`);
         }

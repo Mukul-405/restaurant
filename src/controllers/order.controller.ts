@@ -3,6 +3,7 @@ import { AuthRequest } from '../middlewares/auth.middleware';
 import { orderService } from '../services/order.service';
 import { z } from 'zod';
 import { OrderStatus, Role } from '@prisma/client';
+import { logger } from '../config/logger';
 
 // Data scoping, separate from the section permission: waiters see only their own
 // orders, the two admin roles see everyone's.
@@ -64,8 +65,10 @@ export class OrderController {
         ...data,
         userId: req.user!.id,
       });
+      logger.info({ orderId: result.id, userId: req.user!.id }, 'Order created');
       res.status(201).json(result);
     } catch (error) {
+      logger.error({ err: error, userId: req.user?.id }, 'Failed to create order');
       next(error);
     }
   }
@@ -75,13 +78,14 @@ export class OrderController {
       const id = z.coerce.number().int().positive().parse(req.params.id);
 
       const result = await orderService.getOrderById(id);
-      
+
       if (!canSeeAllOrders(req.user!.role) && result.userId !== req.user!.id) {
         return res.status(403).json({ message: 'Forbidden: You do not own this order' });
       }
 
       res.status(200).json(result);
     } catch (error) {
+      logger.error({ err: error, orderId: req.params.id }, 'Failed to get order');
       next(error);
     }
   }
@@ -97,8 +101,10 @@ export class OrderController {
 
       const data = updateOrderSchema.parse(req.body);
       const result = await orderService.updateOrder(id, data);
+      logger.info({ orderId: id, userId: req.user!.id }, 'Order updated');
       res.status(200).json(result);
     } catch (error) {
+      logger.error({ err: error, orderId: req.params.id }, 'Failed to update order');
       next(error);
     }
   }
@@ -106,7 +112,7 @@ export class OrderController {
   async searchOrders(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const query = searchOrderSchema.parse(req.query);
-      
+
       // Enforce isolation: Waiters can only see their own orders
       if (!canSeeAllOrders(req.user!.role)) {
         query.userId = req.user!.id;
@@ -115,6 +121,7 @@ export class OrderController {
       const result = await orderService.searchOrders(query);
       res.status(200).json(result);
     } catch (error) {
+      logger.error({ err: error }, 'Failed to search orders');
       next(error);
     }
   }
@@ -124,6 +131,7 @@ export class OrderController {
       const result = await orderService.getKots(query);
       res.status(200).json(result);
     } catch (error) {
+      logger.error({ err: error }, 'Failed to get KOTs');
       next(error);
     }
   }
@@ -143,8 +151,10 @@ export class OrderController {
       }
 
       const result = await orderService.transferToRoom(id, guestPhone);
+      logger.info({ orderId: id }, 'Order transferred to room');
       res.status(200).json(result);
     } catch (error) {
+      logger.error({ err: error, orderId: req.params.id }, 'Failed to transfer order to room');
       next(error);
     }
   }

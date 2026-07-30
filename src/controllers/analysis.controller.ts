@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getRevenueAnalysisService, getWaiterAnalysisService, getBookingAnalysisService, getChannelAnalysisService } from '../services/analysis.service';
+import { logger } from '../config/logger';
 
 function parseDateRange(query: any): { start?: Date; end?: Date; error?: string } {
   const { startDate, endDate } = query;
@@ -31,6 +32,7 @@ export const getRevenueAnalysis = async (req: Request, res: Response, next: Next
     const data = await getRevenueAnalysisService(start, end);
     res.status(200).json(data);
   } catch (error) {
+    logger.error({ err: error }, 'Failed to get revenue analysis');
     next(error);
   }
 };
@@ -43,6 +45,7 @@ export const getWaiterAnalysis = async (req: Request, res: Response, next: NextF
     const data = await getWaiterAnalysisService(start, end);
     res.status(200).json(data);
   } catch (error) {
+    logger.error({ err: error }, 'Failed to get waiter analysis');
     next(error);
   }
 };
@@ -55,6 +58,7 @@ export const getChannelAnalysis = async (req: Request, res: Response, next: Next
     const data = await getChannelAnalysisService(start, end);
     res.status(200).json(data);
   } catch (error) {
+    logger.error({ err: error }, 'Failed to get channel analysis');
     next(error);
   }
 };
@@ -67,6 +71,7 @@ export const getBookingAnalysis = async (req: Request, res: Response, next: Next
     const data = await getBookingAnalysisService(start, end);
     res.status(200).json(data);
   } catch (error) {
+    logger.error({ err: error }, 'Failed to get booking analysis');
     next(error);
   }
 };
