@@ -1,20 +1,29 @@
 import { Router } from 'express';
 import { authController } from '../controllers/auth.controller';
-import { authenticate, authorize, verifyOrigin } from '../middlewares/auth.middleware';
+import { authenticate, authorize, verifyOrigin, verifyCsrf } from '../middlewares/auth.middleware';
 import { userRepository } from '../repositories/user.repository';
-import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
 
 const router = Router();
+
+const ipLoginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Safe buffer for 50+ staff on the same WiFi (10 attempts per person)
+  keyGenerator: (req) => req.ip || 'unknown',
+  message: { message: 'Too many login attempts , please try again' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // Limit each account to 5 requests per 15 minutes
   keyGenerator: (req, res) => {
     // Normalize phone number (digits only) or fallback to IP
-    return req.body?.phoneNumber ? String(req.body.phoneNumber).replace(/\D/g, '') : ipKeyGenerator(req.ip || 'unknown');
+    return req.body?.phoneNumber ? String(req.body.phoneNumber).replace(/\D/g, '') : (req.ip || 'unknown');
   },
   message: { message: 'Too many login attempts, please try again' },
-  standardHeaders: true, 
+  standardHeaders: true,
   legacyHeaders: false,
 });
 
@@ -23,16 +32,16 @@ const refreshTokenRateLimiter = rateLimit({
   max: 10,
   keyGenerator: (req, res) => {
     // Rate limit by the refresh token itself to avoid blocking everyone on the hotel WiFi
-    return req.cookies?.refreshToken ? req.cookies.refreshToken : ipKeyGenerator(req.ip || 'unknown');
+    return req.cookies?.refreshToken ? req.cookies.refreshToken : (req.ip || 'unknown');
   },
   message: { message: 'Too many refresh token attempts' },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-router.post('/login', loginRateLimiter, authController.login);
-router.post('/refresh-token', verifyOrigin, refreshTokenRateLimiter, authController.refreshToken);
-router.post('/logout', verifyOrigin, authenticate, authController.logout);
+router.post('/login', ipLoginRateLimiter, loginRateLimiter, authController.login);
+router.post('/refresh-token', verifyOrigin, verifyCsrf, refreshTokenRateLimiter, authController.refreshToken);
+router.post('/logout', verifyOrigin, verifyCsrf, authenticate, authController.logout);
 
 // Example protected route
 router.get('/me', authenticate, async (req, res, next) => {
@@ -42,8 +51,8 @@ router.get('/me', authenticate, async (req, res, next) => {
     if (!dbUser) {
       return res.status(404).json({ message: 'User not found' });
     }
-    res.json({ 
-      message: 'Protected user data', 
+    res.json({
+      message: 'Protected user data',
       user: {
         id: dbUser.id,
         name: dbUser.name,
@@ -51,7 +60,7 @@ router.get('/me', authenticate, async (req, res, next) => {
         permissions: dbUser.permissions,
         phoneNumber: dbUser.phoneNumber,
         isActive: dbUser.isActive
-      } 
+      }
     });
   } catch (error) {
     next(error);

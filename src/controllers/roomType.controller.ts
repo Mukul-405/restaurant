@@ -28,6 +28,11 @@ const addRoomSchema = z.object({
   status: z.string().trim().optional().default('no status'),
 });
 
+const getAvailabilitySchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format"),
+});
+
 export class RoomTypeController {
   async createRoomType(req: Request, res: Response, next: NextFunction) {
     try {
@@ -53,9 +58,8 @@ export class RoomTypeController {
 
   async getAvailability(req: Request, res: Response, next: NextFunction) {
     try {
-      const { startDate, endDate } = req.query;
-      if (!startDate || !endDate) return res.status(400).json({ message: "startDate and endDate are required" });
-      const availability = await roomTypeService.getAvailability(startDate as string, endDate as string);
+      const { startDate, endDate } = getAvailabilitySchema.parse(req.query);
+      const availability = await roomTypeService.getAvailability(startDate, endDate);
       res.status(200).json(availability);
     } catch (error) {
       logger.error({ err: error }, 'Failed to get room availability');
@@ -78,7 +82,11 @@ export class RoomTypeController {
   async updateRoomType(req: Request, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-      const data = roomTypeSchema.partial().parse(req.body);
+      // `rooms` is deliberately not updatable here: it holds live check-in state
+      // (status, userRoomBookingId) and a blind whole-array write would clobber
+      // it. Physical rooms are mutated only via addRoom/deleteRoom, which lock
+      // the row first.
+      const data = roomTypeSchema.omit({ rooms: true }).partial().parse(req.body);
       const roomType = await roomTypeService.updateRoomType(id, data as any);
       logger.info({ roomTypeId: id }, 'Room type updated');
       res.status(200).json({ message: 'Updated successfully', roomType });

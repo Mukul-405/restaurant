@@ -36,10 +36,10 @@ class CmService {
       bookingId: payload.bookingId,
       source: 'OTA' as any,
       channel: payload.channel,
-      guestName: `${payload.guest.firstName} ${payload.guest.lastName}`.trim(),
-      guestEmail: payload.guest.email,
-      guestPhone: payload.guest.phone ? normalizePhone(payload.guest.phone) : 'N/A', // fallback if empty
-      guestAddress: payload.guest.address || {},
+      guestName: `${payload.guest?.firstName || ''} ${payload.guest?.lastName || ''}`.trim() || 'Guest',
+      guestEmail: payload.guest?.email || null,
+      guestPhone: payload.guest?.phone ? normalizePhone(payload.guest.phone) : 'N/A', // fallback if empty
+      guestAddress: payload.guest?.address || {},
       checkIn: new Date(payload.checkin),
       checkOut: new Date(payload.checkout),
       rooms: (payload.rooms || []).map((r: any, index: number) => ({
@@ -68,7 +68,7 @@ class CmService {
     const username = env.AIOSELL_USERNAME;
     const password = env.AIOSELL_PASSWORD;
     const pmsSlug = env.AIOSELL_PMS_SLUG;
-    
+
     payload.hotelCode = payload.hotelCode || env.AIOSELL_HOTEL_CODE;
 
     const auth = Buffer.from(`${username}:${password}`).toString('base64');
@@ -107,9 +107,9 @@ class CmService {
    * just include a `restrictions` object instead of `available` inside `updates`.
    */
   async pushInventory(updates: any[], toChannels?: string[]) {
-    return this.callAiosellApi('update', { 
-      updates, 
-      ...(toChannels?.length ? { toChannels } : {}) 
+    return this.callAiosellApi('update', {
+      updates,
+      ...(toChannels?.length ? { toChannels } : {})
     });
   }
 
@@ -119,9 +119,9 @@ class CmService {
    * just include a `restrictions` object inside `updates`.
    */
   async pushRates(updates: any[], toChannels?: string[]) {
-    return this.callAiosellApi('update-rates', { 
-      updates, 
-      ...(toChannels?.length ? { toChannels } : {}) 
+    return this.callAiosellApi('update-rates', {
+      updates,
+      ...(toChannels?.length ? { toChannels } : {})
     });
   }
 }

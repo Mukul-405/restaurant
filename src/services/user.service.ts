@@ -3,6 +3,7 @@ import { refreshTokenRepository } from '../repositories/refreshToken.repository'
 import { hashPassword } from '../utils/hash.util';
 import { Permission, Role } from '@prisma/client';
 import { AppError } from '../utils/AppError';
+import { prisma } from '../config/prisma';
 
 /**
  * SUPERADMIN is created by hand in the DB and is the account that can never be
@@ -34,14 +35,21 @@ export class UserService {
     }
 
     const passwordHash = await hashPassword(data.password);
-
-    const user = await userRepository.create({
-      name: data.name,
-      phoneNumber: data.phoneNumber,
-      passwordHash,
-      role: data.role,
-      permissions: data.permissions ?? [],
-    });
+    let user;
+    try {
+      user = await userRepository.create({
+        name: data.name,
+        phoneNumber: data.phoneNumber,
+        passwordHash,
+        role: data.role,
+        permissions: data.permissions ?? [],
+      });
+    } catch (error: any) {
+      if (error.code === 'P2002') {
+        throw new Error('User with this phone number already exists');
+      }
+      throw error;
+    }
 
     return {
       id: user.id,
@@ -81,25 +89,34 @@ export class UserService {
   }
 
   async blockMember(id: string) {
-    const user = await userRepository.findById(id);
-    if (!user) {
-      throw new Error('User not found');
-    }
+    return prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: string; role: Role; isActive: boolean }>>`
+        SELECT id, role, "isActive" FROM "User"
+        WHERE id = ${id} OR (role = 'ADMIN' AND "isActive" = true)
+        ORDER BY id ASC
+        FOR UPDATE`;
 
-    assertNotSuperadmin(user, 'block');
-
-    // Prevent blocking the last admin
-    if (user.role === Role.ADMIN) {
-      const activeAdmins = await userRepository.countAdmins();
-      if (activeAdmins <= 1) {
-        throw new Error('Cannot block the only admin account');
+      const user = rows.find(r => r.id === id);
+      if (!user) {
+        throw new Error('User not found');
       }
-    }
 
-    const updatedUser = await userRepository.updateStatus(id, false);
-    // Immediately delete all refresh tokens to log them out globally
-    await refreshTokenRepository.deleteAllForUser(id);
-    return { id: updatedUser.id, isActive: updatedUser.isActive };
+      assertNotSuperadmin(user, 'block');
+
+      // Prevent blocking the last admin
+      if (user.role === Role.ADMIN) {
+        const activeAdmins = rows.filter(r => r.role === Role.ADMIN && r.isActive).length;
+        if (activeAdmins <= 1) {
+          throw new Error('Cannot block the only admin account');
+        }
+      }
+
+      const updatedUser = await tx.user.update({ where: { id }, data: { isActive: false } });
+      // Same transaction as the block: a blocked user must never be left holding
+      // usable refresh tokens because a second statement failed.
+      await tx.refreshToken.deleteMany({ where: { userId: id } });
+      return { id: updatedUser.id, isActive: updatedUser.isActive };
+    });
   }
 
   async unblockMember(id: string) {

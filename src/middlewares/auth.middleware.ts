@@ -87,3 +87,16 @@ export const verifyOrigin = (req: Request, res: Response, next: NextFunction) =>
   }
   next();
 };
+
+export const verifyCsrf = (req: Request, res: Response, next: NextFunction) => {
+  // Only strictly enforce in production where sameSite: 'none' is used
+  if (process.env.NODE_ENV === 'production') {
+    const cookieToken = req.cookies['XSRF-TOKEN'];
+    const headerToken = req.headers['x-xsrf-token'];
+    
+    if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+      return res.status(403).json({ message: 'Forbidden: CSRF token mismatch or missing' });
+    }
+  }
+  next();
+};

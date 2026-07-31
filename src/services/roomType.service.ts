@@ -27,10 +27,11 @@ export class RoomTypeService {
       const inventoryData = await cmService.fetchInventory(startDate, endDate);
       const availabilityMap: Record<string, number> = {};
 
-      // Aiosell returns an array of date entries, each with rooms[].roomCode and rooms[].available.
+      // Aiosell returns an object with an `updates` array of date entries.
       // We take the minimum availability across all dates for each roomCode.
-      if (Array.isArray(inventoryData)) {
-        for (const dateEntry of inventoryData) {
+      const updates = inventoryData?.updates;
+      if (Array.isArray(updates)) {
+        for (const dateEntry of updates) {
           const rooms = dateEntry.rooms || [];
           for (const room of rooms) {
             if (room.roomCode && typeof room.available === 'number') {

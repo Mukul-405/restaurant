@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma';
+import { Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import { roomTypeService } from './roomType.service';
 import { cmService } from './cm.service';
@@ -11,6 +12,26 @@ function generateBookingId(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, BOOKING_ID_HEX_LEN).toUpperCase();
 }
 
+// Locks the given RoomTypes' rows for the rest of the transaction so a concurrent
+// transaction touching the same roomCode blocks until this one commits, instead of
+// both reading the same stale `rooms` array and one write clobbering the other.
+// Sorting roomCodes before locking keeps lock-acquisition order consistent across
+// callers (checkIn/checkOut/editBookingRooms), which avoids deadlocks between two
+// transactions that lock overlapping room types in different orders.
+async function lockRoomsForUpdate(
+  tx: Prisma.TransactionClient,
+  roomCodes: string[]
+): Promise<Record<string, any[]>> {
+  if (roomCodes.length === 0) return {};
+  const sorted = [...roomCodes].sort();
+  const rows = await tx.$queryRaw<Array<{ roomCode: string; rooms: any }>>`
+    SELECT "roomCode", "rooms" FROM "RoomType"
+    WHERE "roomCode" = ANY(${sorted})
+    ORDER BY "roomCode" ASC
+    FOR UPDATE`;
+  return Object.fromEntries(rows.map(r => [r.roomCode, Array.isArray(r.rooms) ? r.rooms : []]));
+}
+
 export class BookingService {
 
   async createBooking(data: any) {
@@ -18,9 +39,11 @@ export class BookingService {
 
     const checkInDate = new Date(data.checkIn);
     const checkOutDate = new Date(data.checkOut);
+    const checkOutMinusOne = new Date(checkOutDate.getTime() - 24 * 60 * 60 * 1000);
+    const endDateStr = checkOutMinusOne.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
     // Fetch dynamic availability to validate
-    const availability = await roomTypeService.getAvailability(data.checkIn, data.checkOut);
+    const availability = await roomTypeService.getAvailability(data.checkIn, endDateStr);
 
     // Fetch unique room types once to avoid N+1 queries
     const uniqueRoomCodes = [...new Set(data.rooms.map((r: any) => r.roomCode))] as string[];
@@ -87,7 +110,7 @@ export class BookingService {
     try {
       const updates = [{
         startDate: data.checkIn,
-        endDate: data.checkOut,
+        endDate: endDateStr,
         rooms: Object.keys(requestedCounts).map(roomCode => ({
           roomCode,
           available: Math.max(0, availability[roomCode] - requestedCounts[roomCode])
@@ -130,8 +153,7 @@ export class BookingService {
 
       // Validate assignments
       const uniqueRoomCodes = [...new Set(assignments.map(a => a.roomCode))] as string[];
-      const roomTypes = await tx.roomType.findMany({ where: { roomCode: { in: uniqueRoomCodes } } });
-      const roomUpdates: Record<string, any[]> = Object.fromEntries(roomTypes.map(rt => [rt.roomCode, (rt.rooms as any[]) || []]));
+      const roomUpdates = await lockRoomsForUpdate(tx, uniqueRoomCodes);
 
       for (const assignment of assignments) {
         if (!roomUpdates[assignment.roomCode]) {
@@ -202,29 +224,25 @@ export class BookingService {
       // Smartly find which RoomTypes this booking is associated with
       const bookingRooms = (booking.rooms as any[]) || [];
       const roomCodes = Array.from(new Set(bookingRooms.map(r => r.roomCode).filter(Boolean))) as string[];
-      const roomTypes = await tx.roomType.findMany({ where: { roomCode: { in: roomCodes } } });
+      const roomUpdates = await lockRoomsForUpdate(tx, roomCodes);
 
-      for (const roomType of roomTypes) {
-        if (roomType && roomType.rooms) {
-          const roomCode = roomType.roomCode;
-          const physicalRooms = roomType.rooms as any[];
-          physicalTotals[roomCode] = physicalRooms.length;
-          let updated = false;
+      for (const [roomCode, physicalRooms] of Object.entries(roomUpdates)) {
+        physicalTotals[roomCode] = physicalRooms.length;
+        let updated = false;
 
-          for (const room of physicalRooms) {
-            if (room.userRoomBookingId === id) {
-              room.status = 'no status';
-              room.userRoomBookingId = null;
-              updated = true;
-            }
+        for (const room of physicalRooms) {
+          if (room.userRoomBookingId === id) {
+            room.status = 'no status';
+            room.userRoomBookingId = null;
+            updated = true;
           }
+        }
 
-          if (updated) {
-            await tx.roomType.update({
-              where: { roomCode },
-              data: { rooms: physicalRooms }
-            });
-          }
+        if (updated) {
+          await tx.roomType.update({
+            where: { roomCode },
+            data: { rooms: physicalRooms }
+          });
         }
       }
 
@@ -314,8 +332,7 @@ export class BookingService {
       const newRoomCodes = Array.from(new Set(assignments.map(a => a.roomCode))) as string[];
       const allRoomCodes = Array.from(new Set([...oldRoomCodes, ...newRoomCodes]));
 
-      const roomTypes = await tx.roomType.findMany({ where: { roomCode: { in: allRoomCodes } } });
-      const roomUpdates: Record<string, any[]> = Object.fromEntries(roomTypes.map(rt => [rt.roomCode, (rt.rooms as any[]) || []]));
+      const roomUpdates = await lockRoomsForUpdate(tx, allRoomCodes);
 
       // Step 1: Free up all currently assigned physical rooms
       for (const roomCode of oldRoomCodes) {

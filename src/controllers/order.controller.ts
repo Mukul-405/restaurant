@@ -145,10 +145,8 @@ export class OrderController {
         return res.status(403).json({ message: 'Forbidden: You do not own this order' });
       }
 
-      const guestPhone = req.body.guestPhone;
-      if (!guestPhone || typeof guestPhone !== 'string') {
-        return res.status(400).json({ message: 'Valid guestPhone is required' });
-      }
+      const guestPhone = z.string({ message: 'Valid guestPhone is required' })
+        .trim().min(10).max(15).parse(req.body.guestPhone);
 
       const result = await orderService.transferToRoom(id, guestPhone);
       logger.info({ orderId: id }, 'Order transferred to room');

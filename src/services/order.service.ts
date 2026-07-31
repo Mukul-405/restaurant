@@ -185,58 +185,61 @@ export class OrderService {
   }
 
   async transferToRoom(orderId: number, guestPhone: string) {
-    const order = await this.getOrderById(orderId);
-    if (!order) throw new Error('Order not found');
-    if (order.status === 'COMPLETED') throw new Error('Order is already completed');
-    if (order.status === 'CANCELLED') throw new Error('Order is cancelled');
-
-    const booking = await prisma.userRoomBooking.findFirst({
-      where: {
-        guestPhone,
-        status: { in: ['RESERVED', 'CHECKED_IN'] }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    if (!booking) {
-      throw new Error('No active room booking found for this phone number');
-    }
-
-    const currentFoodOrders: any[] = Array.isArray((booking as any).foodOrders) ? (booking as any).foodOrders : [];
-    const orderItems: any[] = Array.isArray(order.items) ? order.items : [];
-
-    orderItems.forEach(item => {
-      const existing = currentFoodOrders.find((f: any) => f.menuItemId === item.menuItemId || f.name === item.name);
-      if (existing) {
-        existing.quantity += item.quantity;
-        existing.price = item.price; // keep latest price
-      } else {
-        currentFoodOrders.push({
-          menuItemId: item.menuItemId,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price
-        });
+    return prisma.$transaction(async (tx) => {
+      const claimed = await tx.order.updateMany({
+        where: { id: orderId, status: 'PENDING' },
+        data: { status: 'COMPLETED' },
+      });
+      if (claimed.count === 0) {
+        const existing = await tx.order.findUnique({ where: { id: orderId } });
+        if (!existing) throw new Error('Order not found');
+        if (existing.status === 'COMPLETED') throw new Error('Order is already completed');
+        if (existing.status === 'CANCELLED') throw new Error('Order is cancelled');
+        throw new Error('Order could not be transferred');
       }
-    });
 
-    const newFoodTotal = new Prisma.Decimal((booking as any).foodTotalAmount.toString()).plus(order.finalDiscountedAmount.toString());
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      const locked = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM "UserRoomBooking"
+        WHERE "guestPhone" = ${guestPhone} AND status IN ('RESERVED', 'CHECKED_IN')
+        ORDER BY "createdAt" DESC
+        LIMIT 1
+        FOR UPDATE`;
+      if (locked.length === 0) {
+        throw new Error('No active room booking found for this phone number');
+      }
+      const bookingId = locked[0].id;
 
-    await prisma.$transaction([
-      prisma.userRoomBooking.update({
-        where: { id: booking.id },
+      const booking = await tx.userRoomBooking.findUnique({ where: { id: bookingId } });
+      const currentFoodOrders: any[] = Array.isArray(booking!.foodOrders) ? booking!.foodOrders as any[] : [];
+      const orderItems: any[] = Array.isArray(order!.items) ? order!.items as any[] : [];
+
+      orderItems.forEach(item => {
+        const existing = currentFoodOrders.find((f: any) => f.menuItemId === item.menuItemId || f.name === item.name);
+        if (existing) {
+          existing.quantity += item.quantity;
+          existing.price = item.price; // keep latest price
+        } else {
+          currentFoodOrders.push({
+            menuItemId: item.menuItemId,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          });
+        }
+      });
+
+      await tx.userRoomBooking.update({
+        where: { id: bookingId },
         data: {
           foodOrders: currentFoodOrders as unknown as Prisma.InputJsonValue,
-          foodTotalAmount: newFoodTotal
-        }
-      }),
-      prisma.order.update({
-        where: { id: orderId },
-        data: { status: 'COMPLETED' }
-      })
-    ]);
+          // Atomic increment — safe even without the lock, and correct under it.
+          foodTotalAmount: { increment: order!.finalDiscountedAmount },
+        },
+      });
 
-    return { message: 'Order successfully transferred to room' };
+      return { message: 'Order successfully transferred to room' };
+    });
   }
 }
 

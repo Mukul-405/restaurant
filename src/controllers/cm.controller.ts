@@ -6,32 +6,44 @@ import { logger } from '../config/logger';
 const baseWebhookSchema = z.object({
   bookingId: z.string(),
   channel: z.string(),
+  hotelCode: z.string(),
 });
 
 const bookOrModifySchema = baseWebhookSchema.extend({
   action: z.enum(['book', 'modify']),
+  cmBookingId: z.string().optional().nullable(),
+  segment: z.string(),
   guest: z.object({
-    firstName: z.string(),
-    lastName: z.string(),
-    email: z.string().optional(),
-    phone: z.string().optional(),
-    address: z.any().optional(),
-  }),
+    firstName: z.string().optional().nullable(),
+    lastName: z.string().optional().nullable(),
+    email: z.string().optional().nullable(),
+    phone: z.string().optional().nullable(),
+    address: z.any().optional().nullable(),
+  }).optional().nullable(),
   checkin: z.string(),
   checkout: z.string(),
   bookedOn: z.string(),
   rooms: z.array(z.object({
     roomCode: z.string(),
     rateplanCode: z.string(),
+    guestName: z.string().optional().nullable(),
     occupancy: z.object({
       adults: z.number().int().min(1),
       children: z.number().int().min(0),
     }).optional(),
+    prices: z.array(z.object({
+      date: z.string(),
+      sellRate: z.number(),
+    })).optional(),
   })).min(1),
   amount: z.object({
     amountAfterTax: z.number(),
+    amountBeforeTax: z.number(),
     tax: z.number(),
-    commission: z.number().optional(),
+    currency: z.string(),
+    commission: z.number().optional().nullable(),
+    tcs: z.number().optional().nullable(),
+    tds: z.number().optional().nullable(),
   }),
   pah: z.boolean(),
   specialRequests: z.string().optional().nullable(),

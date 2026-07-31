@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import { authService } from '../services/auth.service';
 import { z } from 'zod';
 import { Role } from '@prisma/client';
@@ -19,6 +20,14 @@ export class AuthController {
       
       res.cookie('refreshToken', result.refreshToken, {
         httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000 // 1 day
+      });
+
+      const csrfToken = crypto.randomBytes(32).toString('hex');
+      res.cookie('XSRF-TOKEN', csrfToken, {
+        httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 24 * 60 * 60 * 1000 // 1 day
@@ -51,6 +60,14 @@ export class AuthController {
         maxAge: 24 * 60 * 60 * 1000 // 1 day
       });
 
+      const csrfToken = crypto.randomBytes(32).toString('hex');
+      res.cookie('XSRF-TOKEN', csrfToken, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        maxAge: 24 * 60 * 60 * 1000 // 1 day
+      });
+
       res.status(200).json({ accessToken: result.accessToken });
     } catch (error) {
       if (error instanceof Error && (error.message.includes('expired') || error.message.includes('not found'))) {
@@ -69,6 +86,11 @@ export class AuthController {
       }
       res.clearCookie('refreshToken', {
         httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      });
+      res.clearCookie('XSRF-TOKEN', {
+        httpOnly: false,
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       });
