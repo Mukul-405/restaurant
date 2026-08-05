@@ -10,10 +10,18 @@ const assignableRoles = Object.values(Role).filter(r => r !== Role.SUPERADMIN);
 const roleSchema = z.enum(assignableRoles as [string, ...string[]]);
 const permissionsSchema = z.array(z.enum(Object.values(Permission) as [string, ...string[]]));
 
+const passwordSchema = z.string()
+  .min(12, 'Password must be at least 12 characters')
+  .max(128)
+  .regex(/[a-z]/, 'Password must contain at least one lowercase letter (a-z)')
+  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter (A-Z)')
+  .regex(/[0-9]/, 'Password must contain at least one number (0-9)')
+  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character');
+
 const createMemberSchema = z.object({
   name: z.string().trim().min(2).max(200),
   phoneNumber: z.string().trim().min(10).max(15),
-  password: z.string().min(12).max(128),
+  password: passwordSchema,
   role: roleSchema,
   permissions: permissionsSchema.default([]),
 });
@@ -25,7 +33,7 @@ const updateMemberSchema = z.object({
 });
 
 const resetPasswordSchema = z.object({
-  password: z.string().min(12).max(128),
+  password: passwordSchema,
 });
 
 export class UserController {
