@@ -155,6 +155,14 @@ export class OrderService {
     const page = query.page || 1;
     const limit = query.limit || 10;
 
+    // Ensure the date range covers the entire day boundaries.
+    if (query.startDate) {
+      query.startDate.setHours(0, 0, 0, 0);
+    }
+    if (query.endDate) {
+      query.endDate.setHours(23, 59, 59, 999);
+    }
+
     const { total, data } = await orderRepository.findOrders({ ...query, page, limit });
 
     return {
