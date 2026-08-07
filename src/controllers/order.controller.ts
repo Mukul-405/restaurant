@@ -31,6 +31,7 @@ const updateOrderSchema = z.object({
   // Nullable + empty string so an order's phone can be cleared, not just changed.
   phoneNumber: z.string().trim().max(15).nullable().optional(),
   status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
+  paymentMode: z.enum(['CASH', 'CARD', 'UPI']).optional(),
   cancellationReason: z.string().trim().max(500).optional(),
   items: z.array(orderItemSchema).min(1).max(100).optional(),
   baseAmount: z.number().min(0).optional(),

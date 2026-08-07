@@ -18,7 +18,14 @@ export class MenuService {
       categoryId: category.id,
     });
 
-    return menuItem;
+    return {
+      id: menuItem.id,
+      name: menuItem.name,
+      description: menuItem.description,
+      price: menuItem.price,
+      isAvailable: menuItem.isAvailable,
+      categoryName: menuItem.category.name,
+    };
   }
 
 
@@ -56,7 +63,16 @@ export class MenuService {
       updateData.categoryId = category.id;
     }
 
-    return menuRepository.updateMenuItem(id, updateData);
+    const updatedItem = await menuRepository.updateMenuItem(id, updateData);
+    
+    return {
+      id: updatedItem.id,
+      name: updatedItem.name,
+      description: updatedItem.description,
+      price: updatedItem.price,
+      isAvailable: updatedItem.isAvailable,
+      categoryName: updatedItem.category.name,
+    };
   }
 
   async deleteMenuItem(id: number) {

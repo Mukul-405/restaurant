@@ -30,6 +30,9 @@ export class MenuRepository {
   async createMenuItem(data: { name: string; price: number; description?: string; categoryId: number }) {
     return prisma.menuItem.create({
       data,
+      include: {
+        category: true,
+      }
     });
   }
 
@@ -55,6 +58,9 @@ export class MenuRepository {
     return prisma.menuItem.update({
       where: { id },
       data,
+      include: {
+        category: true,
+      }
     });
   }
 

@@ -1,5 +1,5 @@
 import { orderRepository } from '../repositories/order.repository';
-import { OrderStatus, Prisma } from '@prisma/client';
+import { OrderStatus, PaymentMode, Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 import { normalizePhone } from '../utils/phone.util';
 
@@ -64,6 +64,7 @@ export class OrderService {
     data: {
       phoneNumber?: string | null;
       status?: OrderStatus;
+      paymentMode?: PaymentMode;
       cancellationReason?: string;
       items?: OrderItem[];
       baseAmount?: number;
@@ -83,6 +84,7 @@ export class OrderService {
       updateData.phoneNumber = data.phoneNumber ? normalizePhone(data.phoneNumber) : null;
     }
     if (data.status) updateData.status = data.status;
+    if (data.paymentMode) updateData.paymentMode = data.paymentMode;
     if (data.cancellationReason) updateData.cancellationReason = data.cancellationReason;
     if (data.baseAmount !== undefined) updateData.baseAmount = data.baseAmount;
     if (data.gstAmount !== undefined) updateData.gstAmount = data.gstAmount;
