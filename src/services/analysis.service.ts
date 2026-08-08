@@ -22,10 +22,47 @@ export const getRevenueAnalysisService = async (startDate: Date, endDate: Date) 
     },
   });
 
+  const paymentModeGroup = await prisma.order.groupBy({
+    by: ['paymentMode'],
+    _sum: {
+      baseAmount: true,
+      gstAmount: true,
+      finalDiscountedAmount: true,
+    },
+    where: {
+      status: 'COMPLETED',
+      createdAt: {
+        gte: start,
+        lte: end,
+      },
+    },
+  });
+
+  const paymentModes = {
+    CASH: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
+    CARD: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
+    UPI: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
+  };
+
+  paymentModeGroup.forEach((item) => {
+    const base = Number(item._sum.baseAmount || 0);
+    const gst = Number(item._sum.gstAmount || 0);
+    const total = Number(item._sum.finalDiscountedAmount || 0);
+
+    const mode = item.paymentMode === 'CARD' ? 'CARD' : item.paymentMode === 'UPI' ? 'UPI' : 'CASH';
+    paymentModes[mode].baseAmount += base;
+    paymentModes[mode].gstAmount += gst;
+    paymentModes[mode].totalAmount += total;
+  });
+
   return {
-    totalBaseAmount: result._sum.baseAmount || 0,
-    totalGstAmount: result._sum.gstAmount || 0,
-    totalFinalDiscountedAmount: result._sum.finalDiscountedAmount || 0,
+    totalBaseAmount: Number(result._sum.baseAmount || 0),
+    totalGstAmount: Number(result._sum.gstAmount || 0),
+    totalFinalDiscountedAmount: Number(result._sum.finalDiscountedAmount || 0),
+    paymentModes,
+    cashAmount: paymentModes.CASH.totalAmount,
+    cardAmount: paymentModes.CARD.totalAmount,
+    upiAmount: paymentModes.UPI.totalAmount,
   };
 };
 
