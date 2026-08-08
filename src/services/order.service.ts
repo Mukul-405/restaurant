@@ -83,7 +83,12 @@ export class OrderService {
     if (data.phoneNumber !== undefined) {
       updateData.phoneNumber = data.phoneNumber ? normalizePhone(data.phoneNumber) : null;
     }
-    if (data.status) updateData.status = data.status;
+    if (data.status) {
+      updateData.status = data.status;
+      if (data.status === OrderStatus.COMPLETED && !data.paymentMode && !existingOrder.paymentMode) {
+        updateData.paymentMode = PaymentMode.CASH;
+      }
+    }
     if (data.paymentMode) updateData.paymentMode = data.paymentMode;
     if (data.cancellationReason) updateData.cancellationReason = data.cancellationReason;
     if (data.baseAmount !== undefined) updateData.baseAmount = data.baseAmount;
