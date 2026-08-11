@@ -10,6 +10,8 @@ const bookingSchema = z.object({
   guestEmail: z.string().email().optional().or(z.literal('')),
   checkIn: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid checkIn date format' }),
   checkOut: z.string().refine(val => !isNaN(Date.parse(val)), { message: 'Invalid checkOut date format' }),
+  roomDiscountAmount: z.number().nonnegative().optional(),
+  foodDiscountAmount: z.number().nonnegative().optional(),
   specialRequests: z.string().max(1000).optional(),
   totalAdults: z.number().int().min(1),
   totalChildren: z.number().int().min(0),
@@ -46,9 +48,8 @@ export class BookingController {
 
   async getBookings(req: Request, res: Response, next: NextFunction) {
     try {
-      const phoneStr = z.string().regex(/^\+?\d+$/).max(20).optional().transform(v => v ? normalizePhone(v) : v).parse(req.query.phone);
-
-      const bookings = await bookingService.getBookingsByPhone(phoneStr);
+      const rawPhone = typeof req.query.phone === 'string' && req.query.phone.trim() ? req.query.phone.trim() : undefined;
+      const bookings = await bookingService.getBookingsByPhone(rawPhone);
       res.status(200).json(bookings);
     } catch (error) {
       logger.error({ err: error }, 'Failed to get bookings');
@@ -91,7 +92,12 @@ export class BookingController {
   async checkOutBooking(req: Request, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-      const booking = await bookingService.checkOutBooking(id);
+      const schema = z.object({
+        roomDiscountAmount: z.number().nonnegative().optional().default(0),
+        foodDiscountAmount: z.number().nonnegative().optional().default(0),
+      });
+      const { roomDiscountAmount, foodDiscountAmount } = schema.parse(req.body);
+      const booking = await bookingService.checkOutBooking(id, roomDiscountAmount, foodDiscountAmount);
       logger.info({ bookingId: id }, 'Booking checked out');
       res.status(200).json({ message: 'Checked out successfully', booking });
     } catch (error: any) {
@@ -102,6 +108,22 @@ export class BookingController {
       next(error);
     }
   }
+
+  async cancelBooking(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+      const booking = await bookingService.cancelBooking(id);
+      logger.info({ bookingId: id }, 'Booking cancelled');
+      res.status(200).json({ message: 'Booking cancelled successfully', booking });
+    } catch (error: any) {
+      if (error.message && (error.message.includes('not found') || error.message.includes('status'))) {
+        return res.status(400).json({ message: error.message });
+      }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to cancel booking');
+      next(error);
+    }
+  }
+
   async editBookingRooms(req: Request, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);

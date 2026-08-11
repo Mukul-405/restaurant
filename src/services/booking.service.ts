@@ -125,9 +125,16 @@ export class BookingService {
   }
 
   async getBookingsByPhone(phone?: string) {
-    // No search term must never dump every booking. Require a phone.
     const trimmed = phone?.trim();
-    if (!trimmed) return [];
+    if (!trimmed) {
+      return prisma.userRoomBooking.findMany({
+        where: {
+          status: { in: ['CHECKED_IN', 'RESERVED'] }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+    }
+
     return prisma.userRoomBooking.findMany({
       where: { guestPhone: trimmed },
       orderBy: { createdAt: 'desc' }
@@ -210,7 +217,7 @@ export class BookingService {
     });
   }
 
-  async checkOutBooking(id: number) {
+  async checkOutBooking(id: number, roomDiscountAmount: number = 0, foodDiscountAmount: number = 0) {
     const physicalTotals: Record<string, number> = {};
 
     const updatedBooking = await prisma.$transaction(async (tx) => {
@@ -273,20 +280,20 @@ export class BookingService {
         month: '2-digit',
         day: '2-digit',
       }).formatToParts(d);
-      
+
       const year = parts.find(p => p.type === 'year')?.value;
       const month = parts.find(p => p.type === 'month')?.value;
       const day = parts.find(p => p.type === 'day')?.value;
-      
+
       return `${year}-${month}-${day}`;
     };
 
     const today = new Date();
     const checkOut = new Date(booking.checkOut);
-    
+
     const startDateStr = toYMD_IST(today);
     const checkOutDateStr = toYMD_IST(checkOut);
-    
+
     // Not an early checkout -> no future nights freed.
     if (startDateStr >= checkOutDateStr) return;
 
@@ -314,6 +321,90 @@ export class BookingService {
     });
 
     await cmService.pushInventory([{ startDate, endDate, rooms }]);
+  }
+
+  async cancelBooking(id: number) {
+    const physicalTotals: Record<string, number> = {};
+
+    const updatedBooking = await prisma.$transaction(async (tx) => {
+      const booking = await tx.userRoomBooking.findUnique({
+        where: { id }
+      });
+
+      if (!booking) throw new Error('Booking not found');
+      if (booking.status !== 'RESERVED') throw new Error(`Booking status is ${booking.status}. Only RESERVED bookings can be cancelled.`);
+
+      // Since the booking was RESERVED, physical rooms are likely not assigned yet.
+      // But we still need physicalTotals to cap the inventory push.
+      const bookingRooms = (booking.rooms as any[]) || [];
+      const roomCodes = Array.from(new Set(bookingRooms.map(r => r.roomCode).filter(Boolean))) as string[];
+
+      const roomTypes = await tx.roomType.findMany({
+        where: { roomCode: { in: roomCodes } }
+      });
+
+      for (const rt of roomTypes) {
+        physicalTotals[rt.roomCode] = Array.isArray(rt.rooms) ? rt.rooms.length : 0;
+      }
+
+      const updated = await tx.userRoomBooking.update({
+        where: { id },
+        data: { status: 'CANCELLED' as any }
+      });
+
+      return updated;
+    });
+
+    this.releaseCancelledInventory(updatedBooking, physicalTotals).catch((err) => {
+      logger.error({ err, bookingId: id }, 'Failed to release cancelled inventory');
+    });
+
+    return updatedBooking;
+  }
+
+  private async releaseCancelledInventory(
+    booking: any,
+    physicalTotals: Record<string, number>
+  ) {
+    const toYMD_IST = (d: Date) => {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).formatToParts(d);
+
+      const year = parts.find(p => p.type === 'year')?.value;
+      const month = parts.find(p => p.type === 'month')?.value;
+      const day = parts.find(p => p.type === 'day')?.value;
+
+      return `${year}-${month}-${day}`;
+    };
+
+    const checkIn = new Date(booking.checkIn);
+    const checkOut = new Date(booking.checkOut);
+
+    const startDateStr = toYMD_IST(checkIn);
+    const checkOutMinusOne = new Date(checkOut.getTime() - 24 * 60 * 60 * 1000);
+    const endDateStr = toYMD_IST(checkOutMinusOne);
+
+    if (startDateStr > endDateStr) return; // Edge case (0 night stay)
+
+    const freedCounts: Record<string, number> = {};
+    for (const r of (booking.rooms as any[]) || []) {
+      if (r.roomCode) freedCounts[r.roomCode] = (freedCounts[r.roomCode] || 0) + 1;
+    }
+    if (Object.keys(freedCounts).length === 0) return;
+
+    // Fetch current availability from Aiosell
+    const availability = await roomTypeService.getAvailability(startDateStr, endDateStr);
+    const rooms = Object.keys(freedCounts).map(roomCode => {
+      const current = availability[roomCode] ?? 0;
+      const cap = physicalTotals[roomCode] ?? current + freedCounts[roomCode];
+      return { roomCode, available: Math.min(current + freedCounts[roomCode], cap) };
+    });
+
+    await cmService.pushInventory([{ startDate: startDateStr, endDate: endDateStr, rooms }]);
   }
 
   async editBookingRooms(id: number, assignments: { roomCode: string, roomNumber: string }[]) {

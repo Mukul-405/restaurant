@@ -199,11 +199,11 @@ export class OrderService {
     };
   }
 
-  async transferToRoom(orderId: number, guestPhone: string) {
+  async transferToRoom(orderId: number, userRoomBookingId: number) {
     return prisma.$transaction(async (tx) => {
       const claimed = await tx.order.updateMany({
         where: { id: orderId, status: 'PENDING' },
-        data: { status: 'COMPLETED' },
+        data: { status: 'COMPLETED', paymentMode: 'ROOM_TRANSFER' },
       });
       if (claimed.count === 0) {
         const existing = await tx.order.findUnique({ where: { id: orderId } });
@@ -216,12 +216,12 @@ export class OrderService {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       const locked = await tx.$queryRaw<Array<{ id: number }>>`
         SELECT id FROM "UserRoomBooking"
-        WHERE "guestPhone" = ${guestPhone} AND status IN ('RESERVED', 'CHECKED_IN')
+        WHERE "id" = ${userRoomBookingId} AND status IN ('RESERVED', 'CHECKED_IN')
         ORDER BY "createdAt" DESC
         LIMIT 1
         FOR UPDATE`;
       if (locked.length === 0) {
-        throw new Error('No active room booking found for this phone number');
+        throw new Error('No active room booking found for this room');
       }
       const bookingId = locked[0].id;
 

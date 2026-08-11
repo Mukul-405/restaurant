@@ -42,6 +42,7 @@ export const getRevenueAnalysisService = async (startDate: Date, endDate: Date) 
     CASH: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
     CARD: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
     UPI: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
+    ROOM_TRANSFER: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
   };
 
   paymentModeGroup.forEach((item) => {
@@ -49,7 +50,11 @@ export const getRevenueAnalysisService = async (startDate: Date, endDate: Date) 
     const gst = Number(item._sum.gstAmount || 0);
     const total = Number(item._sum.finalDiscountedAmount || 0);
 
-    const mode = item.paymentMode === 'CARD' ? 'CARD' : item.paymentMode === 'UPI' ? 'UPI' : 'CASH';
+    let mode: keyof typeof paymentModes = 'CASH';
+    if (item.paymentMode === 'CARD') mode = 'CARD';
+    else if (item.paymentMode === 'UPI') mode = 'UPI';
+    else if (item.paymentMode === 'ROOM_TRANSFER') mode = 'ROOM_TRANSFER';
+
     paymentModes[mode].baseAmount += base;
     paymentModes[mode].gstAmount += gst;
     paymentModes[mode].totalAmount += total;
@@ -63,6 +68,7 @@ export const getRevenueAnalysisService = async (startDate: Date, endDate: Date) 
     cashAmount: paymentModes.CASH.totalAmount,
     cardAmount: paymentModes.CARD.totalAmount,
     upiAmount: paymentModes.UPI.totalAmount,
+    roomTransferAmount: paymentModes.ROOM_TRANSFER.totalAmount,
   };
 };
 
@@ -128,14 +134,12 @@ export const getBookingAnalysisService = async (startDate: Date, endDate: Date) 
     { totalRoomRevenue: number; totalBookings: number; totalRoomsSold: number }[]
   >`
     SELECT
-      COALESCE(SUM(CASE WHEN status IN ('CHECKED_IN', 'CHECKED_OUT') THEN "totalAmount" ELSE 0 END), 0) as "totalRoomRevenue",
+      COALESCE(SUM("totalAmount" + "foodTotalAmount" - "roomDiscountAmount" - "foodDiscountAmount"), 0) as "totalRoomRevenue",
       COUNT(*)::int as "totalBookings",
-      COALESCE(SUM(CASE WHEN status IN ('CHECKED_IN', 'CHECKED_OUT')
-        THEN jsonb_array_length(CASE WHEN jsonb_typeof(rooms) = 'array' THEN rooms ELSE '[]'::jsonb END)
-        ELSE 0 END), 0)::int as "totalRoomsSold"
+      COALESCE(SUM(jsonb_array_length(CASE WHEN jsonb_typeof(rooms) = 'array' THEN rooms ELSE '[]'::jsonb END)), 0)::int as "totalRoomsSold"
     FROM "UserRoomBooking"
-    WHERE "createdAt" >= ${start} AND "createdAt" <= ${end}
-      AND status <> 'CANCELLED'
+    WHERE "checkOut" >= ${start} AND "checkOut" <= ${end}
+      AND status = 'CHECKED_OUT'
   `;
 
   const { totalRoomRevenue, totalBookings, totalRoomsSold } = dbResult[0] || {
@@ -161,7 +165,8 @@ export const getChannelAnalysisService = async (startDate: Date, endDate: Date) 
   const dbResult = await prisma.$queryRaw<{ channel: string; count: number }[]>`
     SELECT channel, COUNT(*)::int as count
     FROM "UserRoomBooking"
-    WHERE "createdAt" >= ${start} AND "createdAt" <= ${end} AND channel IS NOT NULL
+    WHERE "checkOut" >= ${start} AND "checkOut" <= ${end} 
+      AND status = 'CHECKED_OUT' AND channel IS NOT NULL
     GROUP BY channel
   `;
 

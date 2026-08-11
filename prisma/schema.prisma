@@ -90,6 +90,7 @@ enum PaymentMode {
   CASH
   CARD
   UPI
+  ROOM_TRANSFER
 }
 
 model Order {
@@ -182,6 +183,9 @@ model UserRoomBooking {
   foodOrders         Json           @default("[]")
   foodTotalAmount    Decimal        @default(0) @db.Decimal(10,2)
 
+  roomDiscountAmount Decimal        @default(0) @db.Decimal(10,2)
+  foodDiscountAmount Decimal        @default(0) @db.Decimal(10,2)
+
   totalAmount        Decimal        @db.Decimal(10,2)
   taxAmount          Decimal        @default(0) @db.Decimal(10,2)
   commission         Decimal?       @db.Decimal(10,2)
@@ -204,5 +208,6 @@ model UserRoomBooking {
   // is what makes book/modify idempotent.
   @@unique([channel, bookingId])
   @@index([guestPhone])
+  @@index([status, checkOut])
   @@index([createdAt(sort: Desc)])
 }
