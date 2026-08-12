@@ -209,5 +209,5 @@ model UserRoomBooking {
   @@unique([channel, bookingId])
   @@index([guestPhone])
   @@index([status, checkOut])
-  @@index([createdAt(sort: Desc)])
+  @@index([status, checkIn])
 }

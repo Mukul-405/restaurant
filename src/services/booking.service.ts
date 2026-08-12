@@ -124,21 +124,61 @@ export class BookingService {
     return booking;
   }
 
-  async getBookingsByPhone(phone?: string) {
-    const trimmed = phone?.trim();
-    if (!trimmed) {
-      return prisma.userRoomBooking.findMany({
-        where: {
-          status: { in: ['CHECKED_IN', 'RESERVED'] }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
+  async searchBookings(query: {
+    phone?: string;
+    status?: 'ALL' | 'RESERVED' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
+    date?: string;
+    page: number;
+    limit: number;
+  }) {
+    const { phone, status, date, page, limit } = query;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+    
+    if (phone?.trim()) {
+      const trimmed = phone.trim();
+      where.OR = [
+        { guestPhone: { contains: trimmed, mode: 'insensitive' } },
+        { guestName: { contains: trimmed, mode: 'insensitive' } }
+      ];
+    }
+    
+    if (status && status !== 'ALL') {
+      where.status = status;
     }
 
-    return prisma.userRoomBooking.findMany({
-      where: { guestPhone: trimmed },
-      orderBy: { createdAt: 'desc' }
-    });
+    if (date) {
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(date);
+      endDate.setHours(23, 59, 59, 999);
+
+      where.checkIn = {
+        gte: startDate,
+        lte: endDate,
+      };
+    }
+
+    const [total, data] = await prisma.$transaction([
+      prisma.userRoomBooking.count({ where }),
+      prisma.userRoomBooking.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      })
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      }
+    };
   }
 
   async getBookingById(id: number) {

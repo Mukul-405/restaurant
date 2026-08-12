@@ -25,6 +25,14 @@ const bookingSchema = z.object({
   source: z.enum(['DIRECT', 'OTA']).default('DIRECT')
 });
 
+const searchBookingSchema = z.object({
+  phone: z.string().optional(),
+  status: z.enum(['ALL', 'RESERVED', 'CHECKED_IN', 'CHECKED_OUT', 'CANCELLED']).optional().default('ALL'),
+  date: z.string().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(10),
+});
+
 export class BookingController {
   async createBooking(req: Request, res: Response, next: NextFunction) {
     try {
@@ -48,10 +56,13 @@ export class BookingController {
 
   async getBookings(req: Request, res: Response, next: NextFunction) {
     try {
-      const rawPhone = typeof req.query.phone === 'string' && req.query.phone.trim() ? req.query.phone.trim() : undefined;
-      const bookings = await bookingService.getBookingsByPhone(rawPhone);
-      res.status(200).json(bookings);
-    } catch (error) {
+      const query = searchBookingSchema.parse(req.query);
+      const result = await bookingService.searchBookings(query);
+      res.status(200).json(result);
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Validation failed', errors: error.issues });
+      }
       logger.error({ err: error }, 'Failed to get bookings');
       next(error);
     }
