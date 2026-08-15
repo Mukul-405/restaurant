@@ -98,7 +98,6 @@ model Order {
 
   paymentMode PaymentMode?
 
-  phoneNumber String? @db.VarChar(15)
   tableNumber Int?
   items       Json
   kotHistory  Json @default("[]")
@@ -120,8 +119,6 @@ model Order {
 
   @@index([status, createdAt(sort: Desc)])
   @@index([userId, status, createdAt(sort: Desc)])
-  @@index([userId, createdAt(sort: Desc)])
-  @@index([phoneNumber, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
 }
 

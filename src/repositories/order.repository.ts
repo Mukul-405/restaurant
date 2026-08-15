@@ -26,7 +26,6 @@ export class OrderRepository {
 
   async findOrders(query: {
     id?: number;
-    phoneNumber?: string;
     status?: OrderStatus;
     startDate?: Date;
     endDate?: Date;
@@ -38,9 +37,6 @@ export class OrderRepository {
 
     if (query.id) {
       where.id = query.id;
-    }
-    if (query.phoneNumber) {
-      where.phoneNumber = query.phoneNumber;
     }
     if (query.status) {
       where.status = query.status;

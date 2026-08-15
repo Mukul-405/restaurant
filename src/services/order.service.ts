@@ -1,7 +1,6 @@
 import { orderRepository } from '../repositories/order.repository';
 import { OrderStatus, PaymentMode, Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
-import { normalizePhone } from '../utils/phone.util';
 
 interface OrderItem {
   menuItemId: number;
@@ -12,7 +11,6 @@ interface OrderItem {
 
 export class OrderService {
   async createOrder(data: {
-    phoneNumber?: string;
     items: OrderItem[];
     baseAmount: number;
     gstAmount: number;
@@ -36,7 +34,6 @@ export class OrderService {
     }));
 
     const createData: any = {
-      phoneNumber: data.phoneNumber,
       items: prismaItems,
       baseAmount: data.baseAmount,
       gstAmount: data.gstAmount,
@@ -62,7 +59,6 @@ export class OrderService {
   async updateOrder(
     id: number,
     data: {
-      phoneNumber?: string | null;
       status?: OrderStatus;
       paymentMode?: PaymentMode;
       cancellationReason?: string;
@@ -79,10 +75,6 @@ export class OrderService {
 
     const existingOrder = await this.getOrderById(id);
 
-    // Checked against undefined, not truthiness: null and '' are valid "clear the phone".
-    if (data.phoneNumber !== undefined) {
-      updateData.phoneNumber = data.phoneNumber ? normalizePhone(data.phoneNumber) : null;
-    }
     if (data.status) {
       updateData.status = data.status;
       if (data.status === OrderStatus.COMPLETED && !data.paymentMode && !existingOrder.paymentMode) {
@@ -151,7 +143,6 @@ export class OrderService {
 
   async searchOrders(query: {
     id?: number;
-    phoneNumber?: string;
     status?: OrderStatus;
     startDate?: Date;
     endDate?: Date;

@@ -1,10 +1,24 @@
 import { menuRepository } from '../repositories/menu.repository';
+
 export class MenuService {
+  private cachedMenu: {
+    categories: { id: number; name: string }[];
+    items: any[];
+  } | null = null;
+  private lastFetched: number = 0;
+  private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours TTL (auto-invalidated on any write)
+
+  public invalidateCache() {
+    this.cachedMenu = null;
+    this.lastFetched = 0;
+  }
+
   async bulkCreateCategories(categories: string[]) {
     if (!categories || categories.length === 0) {
       throw new Error('No categories provided');
     }
     await menuRepository.createManyCategories(categories);
+    this.invalidateCache();
     return { message: 'Categories created successfully' };
   }
 
@@ -18,6 +32,8 @@ export class MenuService {
       categoryId: category.id,
     });
 
+    this.invalidateCache();
+
     return {
       id: menuItem.id,
       name: menuItem.name,
@@ -28,9 +44,12 @@ export class MenuService {
     };
   }
 
-
-
   async getAllMenuItems() {
+    const now = Date.now();
+    if (this.cachedMenu && now - this.lastFetched < this.CACHE_TTL_MS) {
+      return this.cachedMenu;
+    }
+
     const categories = await menuRepository.getAllCategories();
     const items = await menuRepository.getAllMenuItems();
     
@@ -43,10 +62,13 @@ export class MenuService {
       categoryName: item.category.name,
     }));
 
-    return {
+    this.cachedMenu = {
       categories: categories.map((cat: any) => ({ id: cat.id, name: cat.name })),
       items: mappedItems,
     };
+    this.lastFetched = now;
+
+    return this.cachedMenu;
   }
 
   async updateMenuItem(id: number, data: { name?: string; price?: number; description?: string; isAvailable?: boolean; categoryName?: string }) {
@@ -65,6 +87,8 @@ export class MenuService {
 
     const updatedItem = await menuRepository.updateMenuItem(id, updateData);
     
+    this.invalidateCache();
+
     return {
       id: updatedItem.id,
       name: updatedItem.name,
@@ -76,7 +100,9 @@ export class MenuService {
   }
 
   async deleteMenuItem(id: number) {
-    return menuRepository.deleteMenuItem(id);
+    const result = await menuRepository.deleteMenuItem(id);
+    this.invalidateCache();
+    return result;
   }
 }
 

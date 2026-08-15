@@ -11,7 +11,11 @@ export const getRevenueAnalysisService = async (startDate: Date, endDate: Date) 
     _sum: {
       baseAmount: true,
       gstAmount: true,
+      discountAmount: true,
       finalDiscountedAmount: true,
+    },
+    _count: {
+      id: true,
     },
     where: {
       status: 'COMPLETED',
@@ -29,6 +33,9 @@ export const getRevenueAnalysisService = async (startDate: Date, endDate: Date) 
       gstAmount: true,
       finalDiscountedAmount: true,
     },
+    _count: {
+      id: true,
+    },
     where: {
       status: 'COMPLETED',
       createdAt: {
@@ -39,22 +46,24 @@ export const getRevenueAnalysisService = async (startDate: Date, endDate: Date) 
   });
 
   const paymentModes = {
-    CASH: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
-    CARD: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
-    UPI: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
-    ROOM_TRANSFER: { baseAmount: 0, gstAmount: 0, totalAmount: 0 },
+    CASH: { count: 0, baseAmount: 0, gstAmount: 0, totalAmount: 0 },
+    CARD: { count: 0, baseAmount: 0, gstAmount: 0, totalAmount: 0 },
+    UPI: { count: 0, baseAmount: 0, gstAmount: 0, totalAmount: 0 },
+    ROOM_TRANSFER: { count: 0, baseAmount: 0, gstAmount: 0, totalAmount: 0 },
   };
 
   paymentModeGroup.forEach((item) => {
     const base = Number(item._sum.baseAmount || 0);
     const gst = Number(item._sum.gstAmount || 0);
     const total = Number(item._sum.finalDiscountedAmount || 0);
+    const count = item._count.id;
 
     let mode: keyof typeof paymentModes = 'CASH';
     if (item.paymentMode === 'CARD') mode = 'CARD';
     else if (item.paymentMode === 'UPI') mode = 'UPI';
     else if (item.paymentMode === 'ROOM_TRANSFER') mode = 'ROOM_TRANSFER';
 
+    paymentModes[mode].count += count;
     paymentModes[mode].baseAmount += base;
     paymentModes[mode].gstAmount += gst;
     paymentModes[mode].totalAmount += total;
@@ -63,7 +72,9 @@ export const getRevenueAnalysisService = async (startDate: Date, endDate: Date) 
   return {
     totalBaseAmount: Number(result._sum.baseAmount || 0),
     totalGstAmount: Number(result._sum.gstAmount || 0),
+    totalDiscountAmount: Number(result._sum.discountAmount || 0),
     totalFinalDiscountedAmount: Number(result._sum.finalDiscountedAmount || 0),
+    totalOrders: result._count.id,
     paymentModes,
     cashAmount: paymentModes.CASH.totalAmount,
     cardAmount: paymentModes.CARD.totalAmount,

@@ -17,7 +17,6 @@ const orderItemSchema = z.object({
 });
 
 const createOrderSchema = z.object({
-  phoneNumber: z.string().trim().max(15).optional(),
   items: z.array(orderItemSchema).min(1).max(100),
   baseAmount: z.number().min(0),
   gstAmount: z.number().min(0),
@@ -28,8 +27,6 @@ const createOrderSchema = z.object({
 });
 
 const updateOrderSchema = z.object({
-  // Nullable + empty string so an order's phone can be cleared, not just changed.
-  phoneNumber: z.string().trim().max(15).nullable().optional(),
   status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
   paymentMode: z.enum(['CASH', 'CARD', 'UPI']).optional(),
   cancellationReason: z.string().trim().max(500).optional(),
@@ -44,7 +41,6 @@ const updateOrderSchema = z.object({
 
 const searchOrderSchema = z.object({
   id: z.coerce.number().int().positive().optional(),
-  phoneNumber: z.string().optional(),
   status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
   startDate: z.string().optional().transform(val => val ? new Date(val) : undefined),
   endDate: z.string().optional().transform(val => val ? new Date(val) : undefined),
