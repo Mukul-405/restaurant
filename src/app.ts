@@ -7,6 +7,7 @@ import userRoutes from './routes/user.routes';
 import menuRoutes from './routes/menu.routes';
 import orderRoutes from './routes/order.routes';
 import { errorHandler } from './middlewares/error.middleware';
+import { requestLogger } from './middlewares/logger.middleware';
 import analysisRoutes from './routes/analysis.routes';
 
 import roomTypeRoutes from './routes/roomType.routes';
@@ -32,6 +33,7 @@ app.use(cors({
 }));
 app.use(cookieParser());
 app.use(express.json({ limit: '50kb' }));
+app.use(requestLogger);
 
 // Routes
 app.use('/api/auth', authRoutes);

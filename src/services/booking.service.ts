@@ -106,7 +106,7 @@ export class BookingService {
       }
     }
 
-    // Push updated inventory to Aiosell to prevent double booking race condition
+    // Synchronously push updated inventory to Aiosell to prevent double booking race condition
     try {
       const updates = [{
         startDate: data.checkIn,
@@ -116,9 +116,11 @@ export class BookingService {
           available: Math.max(0, availability[roomCode] - requestedCounts[roomCode])
         }))
       }];
-      // Fire and forget so we don't hold up the client if Aiosell is slow
-      cmService.pushInventory(updates).catch(() => { });
+      await cmService.pushInventory(updates);
+      logger.info({ bookingId: booking.id }, 'Channel manager inventory updated for booking');
     } catch (err) {
+      logger.error({ err, bookingId: booking.id }, 'Failed to push inventory to channel manager during booking creation');
+      throw new Error(`Booking created locally, but channel manager sync failed: ${(err as any)?.message || 'Unknown error'}`);
     }
 
     return booking;
@@ -135,7 +137,7 @@ export class BookingService {
     const skip = (page - 1) * limit;
 
     const where: any = {};
-    
+
     if (phone?.trim()) {
       const trimmed = phone.trim();
       where.OR = [
@@ -143,7 +145,7 @@ export class BookingService {
         { guestName: { contains: trimmed, mode: 'insensitive' } }
       ];
     }
-    
+
     if (status && status !== 'ALL') {
       where.status = status;
     }
@@ -295,15 +297,21 @@ export class BookingService {
 
       const updated = await tx.userRoomBooking.update({
         where: { id },
-        data: { status: 'CHECKED_OUT' }
+        data: {
+          status: 'CHECKED_OUT',
+          roomDiscountAmount,
+          foodDiscountAmount
+        }
       });
 
       return updated;
     });
 
-    this.releaseEarlyCheckoutInventory(updatedBooking, physicalTotals).catch((err) => {
-      logger.error({ err, bookingId: id }, 'Failed to release early checkout inventory');
-    });
+    try {
+      await this.releaseEarlyCheckoutInventory(updatedBooking, physicalTotals);
+    } catch (err) {
+      logger.error({ err, bookingId: id }, 'Failed to release early checkout inventory in channel manager');
+    }
 
     return updatedBooking;
   }
@@ -395,9 +403,11 @@ export class BookingService {
       return updated;
     });
 
-    this.releaseCancelledInventory(updatedBooking, physicalTotals).catch((err) => {
-      logger.error({ err, bookingId: id }, 'Failed to release cancelled inventory');
-    });
+    try {
+      await this.releaseCancelledInventory(updatedBooking, physicalTotals);
+    } catch (err) {
+      logger.error({ err, bookingId: id }, 'Failed to release cancelled inventory in channel manager');
+    }
 
     return updatedBooking;
   }
