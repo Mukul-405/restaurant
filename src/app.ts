@@ -35,6 +35,11 @@ app.use(cookieParser());
 app.use(express.json({ limit: '50kb' }));
 app.use(requestLogger);
 
+// Health check for Render
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
