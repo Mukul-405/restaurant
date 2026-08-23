@@ -38,7 +38,7 @@ export class OrderService {
       baseAmount: data.baseAmount,
       gstAmount: data.gstAmount,
       discountAmount: data.discountAmount,
-      finalDiscountedAmount: data.finalDiscountedAmount,
+      finalDiscountedAmount: Math.round(data.finalDiscountedAmount),
       tableNumber: data.tableNumber,
       status: OrderStatus.PENDING,
       userId: data.userId,
@@ -86,7 +86,7 @@ export class OrderService {
     if (data.baseAmount !== undefined) updateData.baseAmount = data.baseAmount;
     if (data.gstAmount !== undefined) updateData.gstAmount = data.gstAmount;
     if (data.discountAmount !== undefined) updateData.discountAmount = data.discountAmount;
-    if (data.finalDiscountedAmount !== undefined) updateData.finalDiscountedAmount = data.finalDiscountedAmount;
+    if (data.finalDiscountedAmount !== undefined) updateData.finalDiscountedAmount = Math.round(data.finalDiscountedAmount);
     if (data.tableNumber !== undefined) updateData.tableNumber = data.tableNumber;
 
     let currentKotHistory: any[] = Array.isArray(existingOrder.kotHistory) ? existingOrder.kotHistory : [];
