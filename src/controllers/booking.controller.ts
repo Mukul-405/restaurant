@@ -154,6 +154,25 @@ export class BookingController {
     }
   }
 
+  async extendCheckout(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+      const { newCheckOut } = req.body;
+      if (!newCheckOut || isNaN(Date.parse(newCheckOut))) {
+        return res.status(400).json({ message: 'Invalid or missing newCheckOut date' });
+      }
+      const booking = await bookingService.extendCheckoutDate(id, newCheckOut);
+      logger.info({ bookingId: id, newCheckOut }, 'Booking checkout date extended');
+      res.status(200).json({ message: 'Checkout date extended successfully', booking });
+    } catch (error: any) {
+      if (error.message && (error.message.includes('not found') || error.message.includes('status') || error.message.includes('greater than') || error.message.includes('Not enough rooms available'))) {
+        return res.status(400).json({ message: error.message });
+      }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to extend checkout date');
+      next(error);
+    }
+  }
+
 }
 
 export const bookingController = new BookingController();

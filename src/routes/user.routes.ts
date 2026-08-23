@@ -7,10 +7,13 @@ import { Permission } from '@prisma/client';
 const router = Router();
 
 router.use(authenticate);
+
+// List members for staff dropdowns/filters
+router.get('/', readLimit(), userController.getAllMembers);
+
 router.use(requirePermission(Permission.MANAGE_MEMBERS));
 
 // Routes
-router.get('/', readLimit(), userController.getAllMembers);
 router.post('/', writeLimit(), userController.createMember);
 
 router.patch('/:id', writeLimit(), userController.updateMember);

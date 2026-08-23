@@ -2,12 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { AuthRequest } from '../middlewares/auth.middleware';
 import { orderService } from '../services/order.service';
 import { z } from 'zod';
-import { OrderStatus, Role } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
 import { logger } from '../config/logger';
-
-// Data scoping, separate from the section permission: waiters see only their own
-// orders, the two admin roles see everyone's.
-const canSeeAllOrders = (role: string) => role === Role.ADMIN || role === Role.SUPERADMIN;
 
 const orderItemSchema = z.object({
   menuItemId: z.number().int().positive(),
@@ -73,13 +69,7 @@ export class OrderController {
   async getOrderById(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-
       const result = await orderService.getOrderById(id);
-
-      if (!canSeeAllOrders(req.user!.role) && result.userId !== req.user!.id) {
-        return res.status(403).json({ message: 'Forbidden: You do not own this order' });
-      }
-
       res.status(200).json(result);
     } catch (error) {
       logger.error({ err: error, orderId: req.params.id }, 'Failed to get order');
@@ -90,12 +80,6 @@ export class OrderController {
   async updateOrder(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-
-      const existingOrder = await orderService.getOrderById(id);
-      if (!canSeeAllOrders(req.user!.role) && existingOrder.userId !== req.user!.id) {
-        return res.status(403).json({ message: 'Forbidden: You do not own this order' });
-      }
-
       const data = updateOrderSchema.parse(req.body);
       const result = await orderService.updateOrder(id, data);
       logger.info({ orderId: id, userId: req.user!.id }, 'Order updated');
@@ -109,12 +93,6 @@ export class OrderController {
   async searchOrders(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const query = searchOrderSchema.parse(req.query);
-
-      // Enforce isolation: Waiters can only see their own orders
-      if (!canSeeAllOrders(req.user!.role)) {
-        query.userId = req.user!.id;
-      }
-
       const result = await orderService.searchOrders(query);
       res.status(200).json(result);
     } catch (error) {
@@ -122,6 +100,7 @@ export class OrderController {
       next(error);
     }
   }
+
   async getKots(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const query = kotQuerySchema.parse(req.query);
@@ -136,12 +115,6 @@ export class OrderController {
   async transferToRoom(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const id = z.coerce.number().int().positive().parse(req.params.id);
-
-      const existingOrder = await orderService.getOrderById(id);
-      if (!canSeeAllOrders(req.user!.role) && existingOrder.userId !== req.user!.id) {
-        return res.status(403).json({ message: 'Forbidden: You do not own this order' });
-      }
-
       const { userRoomBookingId } = z.object({
         userRoomBookingId: z.number().int().positive()
       }).parse(req.body);

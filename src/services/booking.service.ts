@@ -538,6 +538,89 @@ export class BookingService {
       return updatedBooking;
     });
   }
+  async extendCheckoutDate(id: number, newCheckOut: string) {
+    return prisma.$transaction(async (tx) => {
+      const booking = await tx.userRoomBooking.findUnique({
+        where: { id }
+      });
+
+      if (!booking) throw new Error('Booking not found');
+      if (booking.status !== 'CHECKED_IN') throw new Error(`Booking status is ${booking.status}. Only CHECKED_IN bookings can be extended.`);
+
+      const oldCheckOutDate = new Date(booking.checkOut);
+      const newCheckOutDateObj = new Date(newCheckOut);
+      
+      // Zero out times for date comparison
+      const oldDate = new Date(oldCheckOutDate);
+      oldDate.setHours(0, 0, 0, 0);
+      const newDate = new Date(newCheckOutDateObj);
+      newDate.setHours(0, 0, 0, 0);
+
+      if (newDate <= oldDate) {
+        throw new Error('New checkout date must be greater than the current checkout date.');
+      }
+
+      // We need inventory from old checkout date up to new checkout date - 1 day
+      // Example: old checkout 24th, new checkout 26th. Needs inventory for 24th and 25th.
+      const toYMD_IST = (d: Date) => {
+        return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+      };
+
+      const startDateStr = toYMD_IST(oldDate);
+      const newCheckOutMinusOne = new Date(newDate.getTime() - 24 * 60 * 60 * 1000);
+      const endDateStr = toYMD_IST(newCheckOutMinusOne);
+
+      // Calculate room counts required
+      const requestedCounts: Record<string, number> = {};
+      const bookingRooms = (booking.rooms as any[]) || [];
+      for (const room of bookingRooms) {
+        if (room.roomCode) {
+          requestedCounts[room.roomCode] = (requestedCounts[room.roomCode] || 0) + 1;
+        }
+      }
+
+      // Check availability using roomTypeService
+      const availability = await roomTypeService.getAvailability(startDateStr, endDateStr);
+      for (const roomCode of Object.keys(requestedCounts)) {
+        const avail = availability[roomCode];
+        if (avail === undefined || requestedCounts[roomCode] > avail) {
+          throw new Error(`Not enough rooms available for ${roomCode} on extended dates`);
+        }
+      }
+
+      // Calculate new total amount based on extra nights and rateplans
+      const extraNights = Math.round((newDate.getTime() - oldDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      const uniqueRoomCodes = Object.keys(requestedCounts);
+      const roomTypes = await tx.roomType.findMany({
+        where: { roomCode: { in: uniqueRoomCodes } }
+      });
+      const roomTypeMap = Object.fromEntries(roomTypes.map(rt => [rt.roomCode, rt]));
+
+      let extraAmount = 0;
+      for (const room of bookingRooms) {
+        const roomType = roomTypeMap[room.roomCode];
+        if (roomType && roomType.rateplanCodes) {
+          const ratePlans = roomType.rateplanCodes as any[];
+          const plan = ratePlans.find(rp => rp.code === room.rateplanCode);
+          if (plan) {
+            extraAmount += Number(plan.price) * extraNights;
+          }
+        }
+      }
+
+      // Update booking
+      const updatedBooking = await tx.userRoomBooking.update({
+        where: { id },
+        data: {
+          checkOut: newCheckOutDateObj,
+          totalAmount: { increment: extraAmount }
+        }
+      });
+
+      return updatedBooking;
+    });
+  }
 }
 
 export const bookingService = new BookingService();
