@@ -189,3 +189,108 @@ export const getChannelAnalysisService = async (startDate: Date, endDate: Date) 
   return { channelBreakdown };
 };
 
+export interface OrderItemAnalysisResult {
+  totalItemsSold: number;
+  totalUniqueItems: number;
+  totalAmountExcludingGst: number;
+  items: {
+    menuItemId?: number;
+    name: string;
+    totalQuantity: number;
+    price: number;
+    totalAmount: number;
+    orderCount: number;
+  }[];
+}
+
+export const getOrderItemAnalysisService = async (startDate: Date, endDate: Date): Promise<OrderItemAnalysisResult> => {
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+
+  const orders = await prisma.order.findMany({
+    where: {
+      status: 'COMPLETED',
+      createdAt: {
+        gte: start,
+        lte: end,
+      },
+    },
+    select: {
+      id: true,
+      items: true,
+      createdAt: true,
+    },
+  });
+
+  const itemMap = new Map<string, {
+    menuItemId?: number;
+    name: string;
+    totalQuantity: number;
+    price: number;
+    totalAmount: number;
+    orderCount: number;
+  }>();
+
+  let totalItemsSold = 0;
+  let totalAmountExcludingGst = 0;
+
+  for (const order of orders) {
+    const rawItems = Array.isArray(order.items) ? (order.items as any[]) : [];
+    const seenItemsInOrder = new Set<string>();
+
+    for (const item of rawItems) {
+      if (!item || !item.name) continue;
+      const trimmedName = String(item.name).trim();
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = Number(item.price) || 0;
+      const itemTotalAmount = Number((quantity * unitPrice).toFixed(2));
+
+      if (quantity <= 0) continue;
+
+      const mapKey = item.menuItemId ? `id_${item.menuItemId}` : `name_${trimmedName.toLowerCase()}`;
+
+      if (!itemMap.has(mapKey)) {
+        itemMap.set(mapKey, {
+          menuItemId: item.menuItemId ? Number(item.menuItemId) : undefined,
+          name: trimmedName,
+          totalQuantity: 0,
+          price: unitPrice,
+          totalAmount: 0,
+          orderCount: 0,
+        });
+      }
+
+      const entry = itemMap.get(mapKey)!;
+      entry.totalQuantity += quantity;
+      entry.totalAmount = Number((entry.totalAmount + itemTotalAmount).toFixed(2));
+      entry.price = unitPrice;
+
+      if (!seenItemsInOrder.has(mapKey)) {
+        entry.orderCount += 1;
+        seenItemsInOrder.add(mapKey);
+      }
+
+      totalItemsSold += quantity;
+      totalAmountExcludingGst = Number((totalAmountExcludingGst + itemTotalAmount).toFixed(2));
+    }
+  }
+
+  const sortedItems = Array.from(itemMap.values()).sort((a, b) => {
+    if (b.totalQuantity !== a.totalQuantity) {
+      return b.totalQuantity - a.totalQuantity;
+    }
+    return b.totalAmount - a.totalAmount;
+  });
+
+  return {
+    totalItemsSold,
+    totalUniqueItems: sortedItems.length,
+    totalAmountExcludingGst: Number(totalAmountExcludingGst.toFixed(2)),
+    items: sortedItems,
+  };
+};
+
+

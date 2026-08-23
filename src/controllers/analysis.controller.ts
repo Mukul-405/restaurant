@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getRevenueAnalysisService, getWaiterAnalysisService, getBookingAnalysisService, getChannelAnalysisService } from '../services/analysis.service';
+import { getRevenueAnalysisService, getWaiterAnalysisService, getBookingAnalysisService, getChannelAnalysisService, getOrderItemAnalysisService } from '../services/analysis.service';
 import { logger } from '../config/logger';
 
 function parseDateRange(query: any): { start?: Date; end?: Date; error?: string } {
@@ -75,3 +75,17 @@ export const getBookingAnalysis = async (req: Request, res: Response, next: Next
     next(error);
   }
 };
+
+export const getOrderItemAnalysis = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { start, end, error } = parseDateRange(req.query);
+    if (error || !start || !end) return res.status(400).json({ error });
+
+    const data = await getOrderItemAnalysisService(start, end);
+    res.status(200).json(data);
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to get order item analysis');
+    next(error);
+  }
+};
+
