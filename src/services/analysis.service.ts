@@ -278,19 +278,216 @@ export const getOrderItemAnalysisService = async (startDate: Date, endDate: Date
     }
   }
 
-  const sortedItems = Array.from(itemMap.values()).sort((a, b) => {
-    if (b.totalQuantity !== a.totalQuantity) {
-      return b.totalQuantity - a.totalQuantity;
-    }
-    return b.totalAmount - a.totalAmount;
-  });
+  const items = Array.from(itemMap.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
 
   return {
+    totalUniqueItems: items.length,
     totalItemsSold,
-    totalUniqueItems: sortedItems.length,
     totalAmountExcludingGst: Number(totalAmountExcludingGst.toFixed(2)),
-    items: sortedItems,
+    items,
   };
 };
+
+export interface DailyBillSummaryItem {
+  id: number;
+  billNo: string;
+  orderNumber: number;
+  createdAt: Date;
+  dateStr: string;
+  dateHeaderStr: string;
+  dateKey: string;
+  tableNumber: number | null;
+  status: string;
+  cancellationReason: string | null;
+  paymentMode: string | null;
+  baseAmount: number;
+  sgstAmount: number;
+  cgstAmount: number;
+  totalAmount: number;
+  discountAmount: number;
+  finalDiscountedAmount: number;
+  waiterName?: string;
+  remarks: string;
+}
+
+export interface DayGroupSummary {
+  dateStr: string;
+  dateHeaderStr: string;
+  dateKey: string;
+  totalOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  totalBaseAmount: number;
+  totalSgstAmount: number;
+  totalCgstAmount: number;
+  totalAmount: number;
+  orders: DailyBillSummaryItem[];
+}
+
+export interface DailyBillSummaryResult {
+  startDate: string;
+  endDate: string;
+  monthTitle: string;
+  totalOrders: number;
+  completedOrders: number;
+  cancelledOrders: number;
+  totalBaseAmount: number;
+  totalSgstAmount: number;
+  totalCgstAmount: number;
+  grandTotalAmount: number;
+  days: DayGroupSummary[];
+  allOrders: DailyBillSummaryItem[];
+}
+
+export const getDailyBillSummaryService = async (startDate: Date, endDate: Date): Promise<DailyBillSummaryResult> => {
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+
+  const orders = await prisma.order.findMany({
+    where: {
+      createdAt: {
+        gte: start,
+        lte: end,
+      },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+  });
+
+  const dayMap = new Map<string, DayGroupSummary>();
+  const allOrders: DailyBillSummaryItem[] = [];
+
+  let overallTotalBase = 0;
+  let overallTotalSgst = 0;
+  let overallTotalCgst = 0;
+  let overallGrandTotal = 0;
+  let overallCompleted = 0;
+  let overallCancelled = 0;
+
+  orders.forEach((order) => {
+    const orderDate = new Date(order.createdAt);
+    const year = orderDate.getFullYear();
+    const month = String(orderDate.getMonth() + 1).padStart(2, '0');
+    const day = String(orderDate.getDate()).padStart(2, '0');
+    const dateKey = `${year}-${month}-${day}`;
+
+    const dateStr = orderDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const dateHeaderStr = orderDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    let base = Number(order.baseAmount || 0);
+    if (base === 0 && Array.isArray(order.items)) {
+      base = (order.items as any[]).reduce((sum, it) => sum + (Number(it.price || 0) * Number(it.quantity || 0)), 0);
+    }
+    base = Number(base.toFixed(2));
+
+    const isCancelled = order.status === 'CANCELLED';
+    const sgst = isCancelled ? 0 : Number((base * 0.025).toFixed(2));
+    const cgst = isCancelled ? 0 : Number((base * 0.025).toFixed(2));
+    const total = isCancelled ? 0 : Number((base + sgst + cgst).toFixed(2));
+
+    if (isCancelled) {
+      overallCancelled += 1;
+    } else {
+      overallCompleted += 1;
+      overallTotalBase = Number((overallTotalBase + base).toFixed(2));
+      overallTotalSgst = Number((overallTotalSgst + sgst).toFixed(2));
+      overallTotalCgst = Number((overallTotalCgst + cgst).toFixed(2));
+      overallGrandTotal = Number((overallGrandTotal + total).toFixed(2));
+    }
+
+    let remarks = isCancelled 
+      ? (order.cancellationReason ? `Cancelled: ${order.cancellationReason}` : 'Cancelled')
+      : (order.paymentMode || 'Paid');
+
+    if (order.tableNumber) {
+      remarks += ` (T-${order.tableNumber})`;
+    }
+
+    const item: DailyBillSummaryItem = {
+      id: order.id,
+      billNo: `A1-${String(order.id).padStart(2, '0')}`,
+      orderNumber: order.id,
+      createdAt: order.createdAt,
+      dateStr,
+      dateHeaderStr,
+      dateKey,
+      tableNumber: order.tableNumber,
+      status: order.status,
+      cancellationReason: order.cancellationReason,
+      paymentMode: order.paymentMode,
+      baseAmount: base,
+      sgstAmount: sgst,
+      cgstAmount: cgst,
+      totalAmount: total,
+      discountAmount: Number(order.discountAmount || 0),
+      finalDiscountedAmount: Number(order.finalDiscountedAmount || 0),
+      waiterName: order.user?.name,
+      remarks,
+    };
+
+    allOrders.push(item);
+
+    if (!dayMap.has(dateKey)) {
+      dayMap.set(dateKey, {
+        dateStr,
+        dateHeaderStr,
+        dateKey,
+        totalOrders: 0,
+        completedOrders: 0,
+        cancelledOrders: 0,
+        totalBaseAmount: 0,
+        totalSgstAmount: 0,
+        totalCgstAmount: 0,
+        totalAmount: 0,
+        orders: [],
+      });
+    }
+
+    const dayGroup = dayMap.get(dateKey)!;
+    dayGroup.totalOrders += 1;
+    if (isCancelled) {
+      dayGroup.cancelledOrders += 1;
+    } else {
+      dayGroup.completedOrders += 1;
+      dayGroup.totalBaseAmount = Number((dayGroup.totalBaseAmount + base).toFixed(2));
+      dayGroup.totalSgstAmount = Number((dayGroup.totalSgstAmount + sgst).toFixed(2));
+      dayGroup.totalCgstAmount = Number((dayGroup.totalCgstAmount + cgst).toFixed(2));
+      dayGroup.totalAmount = Number((dayGroup.totalAmount + total).toFixed(2));
+    }
+    dayGroup.orders.push(item);
+  });
+
+  const monthTitle = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()
+    ? `Bill Summary Of the Month Of ${start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+    : `Bill Summary (${start.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })} - ${end.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })})`;
+
+  return {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    monthTitle,
+    totalOrders: orders.length,
+    completedOrders: overallCompleted,
+    cancelledOrders: overallCancelled,
+    totalBaseAmount: overallTotalBase,
+    totalSgstAmount: overallTotalSgst,
+    totalCgstAmount: overallTotalCgst,
+    grandTotalAmount: overallGrandTotal,
+    days: Array.from(dayMap.values()),
+    allOrders,
+  };
+};
+
 
 
