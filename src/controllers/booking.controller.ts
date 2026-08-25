@@ -20,9 +20,12 @@ const bookingSchema = z.object({
     rateplanCode: z.string().trim(),
     adults: z.number().int().min(1),
     children: z.number().int().min(0),
-    roomNumber: z.string().trim().optional().nullable()
+    roomNumber: z.string().trim().optional().nullable(),
+    price: z.number().nonnegative().optional()
   })).min(1, 'At least one room is required').max(50),
-  source: z.enum(['DIRECT', 'OTA']).default('DIRECT')
+  source: z.enum(['DIRECT', 'OTA']).default('DIRECT'),
+  totalAmount: z.number().nonnegative().optional(),
+  taxAmount: z.number().nonnegative().optional()
 });
 
 const searchBookingSchema = z.object({
@@ -169,6 +172,26 @@ export class BookingController {
         return res.status(400).json({ message: error.message });
       }
       logger.error({ err: error, bookingId: req.params.id }, 'Failed to extend checkout date');
+      next(error);
+    }
+  }
+
+  async updateGuestDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+      const schema = z.object({
+        guestName: z.string().trim().min(1, 'Guest name is required').max(100),
+        guestPhone: z.string().trim().min(5, 'Valid phone number is required').max(20),
+      });
+      const data = schema.parse(req.body);
+      const booking = await bookingService.updateGuestDetails(id, data.guestName, data.guestPhone);
+      logger.info({ bookingId: id, guestName: data.guestName, guestPhone: data.guestPhone }, 'Booking guest details updated');
+      res.status(200).json({ message: 'Guest details updated successfully', booking });
+    } catch (error: any) {
+      if (error.message && (error.message.includes('not found') || error.message.includes('status') || error.message.includes('Cannot edit'))) {
+        return res.status(400).json({ message: error.message });
+      }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to update booking guest details');
       next(error);
     }
   }

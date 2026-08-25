@@ -35,7 +35,7 @@ async function lockRoomsForUpdate(
 export class BookingService {
 
   async createBooking(data: any) {
-    let totalAmount = 0;
+    let baseAmount = 0;
 
     const checkInDate = new Date(data.checkIn);
     const checkOutDate = new Date(data.checkOut);
@@ -58,10 +58,12 @@ export class BookingService {
       const roomType = roomTypeMap[room.roomCode];
       if (!roomType) throw new Error(`RoomType ${room.roomCode} not found`);
 
-      if (roomType.rateplanCodes) {
+      if (room.price !== undefined && room.price !== null && Number(room.price) >= 0) {
+        baseAmount += Number(room.price);
+      } else if (roomType.rateplanCodes) {
         const ratePlans = roomType.rateplanCodes as any[];
         const plan = ratePlans.find(rp => rp.code === room.rateplanCode);
-        if (plan) totalAmount += Number(plan.price);
+        if (plan) baseAmount += Number(plan.price);
       }
 
       requestedCounts[room.roomCode] = (requestedCounts[room.roomCode] || 0) + 1;
@@ -73,6 +75,9 @@ export class BookingService {
         throw new Error(`Not enough rooms available for ${roomCode}`);
       }
     }
+
+    const taxAmount = Number((baseAmount * 0.05).toFixed(2));
+    const totalAmount = Number((baseAmount + taxAmount).toFixed(2));
 
     // Second pass: Create Booking and nested BookingRooms.
     // bookingId collides at random (48 bits, not zero); on that one-in-a-
@@ -95,6 +100,7 @@ export class BookingService {
             payAtHotel: true,
             status: 'RESERVED' as any,
             totalAmount: totalAmount,
+            taxAmount: taxAmount,
             bookedOn: new Date(),
             rooms: data.rooms
           }
@@ -597,29 +603,61 @@ export class BookingService {
       });
       const roomTypeMap = Object.fromEntries(roomTypes.map(rt => [rt.roomCode, rt]));
 
-      let extraAmount = 0;
+      let extraBaseAmount = 0;
       for (const room of bookingRooms) {
-        const roomType = roomTypeMap[room.roomCode];
-        if (roomType && roomType.rateplanCodes) {
-          const ratePlans = roomType.rateplanCodes as any[];
-          const plan = ratePlans.find(rp => rp.code === room.rateplanCode);
-          if (plan) {
-            extraAmount += Number(plan.price) * extraNights;
+        if (room.price !== undefined && room.price !== null && Number(room.price) >= 0) {
+          extraBaseAmount += Number(room.price) * extraNights;
+        } else {
+          const roomType = roomTypeMap[room.roomCode];
+          if (roomType && roomType.rateplanCodes) {
+            const ratePlans = roomType.rateplanCodes as any[];
+            const plan = ratePlans.find(rp => rp.code === room.rateplanCode);
+            if (plan) {
+              extraBaseAmount += Number(plan.price) * extraNights;
+            }
           }
         }
       }
+
+      const extraTaxAmount = Number((extraBaseAmount * 0.05).toFixed(2));
+      const extraTotalAmount = Number((extraBaseAmount + extraTaxAmount).toFixed(2));
 
       // Update booking
       const updatedBooking = await tx.userRoomBooking.update({
         where: { id },
         data: {
           checkOut: newCheckOutDateObj,
-          totalAmount: { increment: extraAmount }
+          totalAmount: { increment: extraTotalAmount },
+          taxAmount: { increment: extraTaxAmount }
         }
       });
 
       return updatedBooking;
     });
+  }
+
+  async updateGuestDetails(id: number, guestName: string, guestPhone: string) {
+    const booking = await prisma.userRoomBooking.findUnique({
+      where: { id },
+    });
+
+    if (!booking) {
+      throw new Error(`Booking with ID ${id} not found`);
+    }
+
+    if (booking.status !== 'RESERVED' && booking.status !== 'CHECKED_IN') {
+      throw new Error(`Cannot edit guest details for ${booking.status.replace('_', ' ').toLowerCase()} bookings. Only Reserved or Checked-in bookings can be edited.`);
+    }
+
+    const updated = await prisma.userRoomBooking.update({
+      where: { id },
+      data: {
+        guestName,
+        guestPhone,
+      },
+    });
+
+    return updated;
   }
 }
 

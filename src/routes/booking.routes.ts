@@ -16,6 +16,7 @@ router.get('/:id', readLimit(60 * 1000, 120), bookingController.getBookingById);
 router.patch('/:id/check-in', writeLimit(60 * 1000, 60), bookingController.checkInBooking);
 router.patch('/:id/check-out', writeLimit(60 * 1000, 60), bookingController.checkOutBooking);
 router.patch('/:id/extend-checkout', writeLimit(60 * 1000, 60), bookingController.extendCheckout);
+router.patch('/:id/guest-details', writeLimit(60 * 1000, 60), bookingController.updateGuestDetails);
 router.patch('/:id/cancel', writeLimit(60 * 1000, 60), bookingController.cancelBooking);
 router.patch('/:id/edit-rooms', writeLimit(60 * 1000, 60), bookingController.editBookingRooms);
 
