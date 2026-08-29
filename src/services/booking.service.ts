@@ -42,6 +42,8 @@ export class BookingService {
     const checkOutMinusOne = new Date(checkOutDate.getTime() - 24 * 60 * 60 * 1000);
     const endDateStr = checkOutMinusOne.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
+    const nights = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+
     // Fetch dynamic availability to validate
     const availability = await roomTypeService.getAvailability(data.checkIn, endDateStr);
 
@@ -58,15 +60,21 @@ export class BookingService {
       const roomType = roomTypeMap[room.roomCode];
       if (!roomType) throw new Error(`RoomType ${room.roomCode} not found`);
 
+      let roomDailyPrice = 0;
       if (room.price !== undefined && room.price !== null && Number(room.price) >= 0) {
-        baseAmount += Number(room.price);
+        roomDailyPrice = Number(room.price);
       } else if (roomType.rateplanCodes) {
         const ratePlans = roomType.rateplanCodes as any[];
         const plan = ratePlans.find(rp => rp.code === room.rateplanCode);
-        if (plan) baseAmount += Number(plan.price);
+        if (plan) roomDailyPrice = Number(plan.price);
       }
 
+      baseAmount += roomDailyPrice * nights;
       requestedCounts[room.roomCode] = (requestedCounts[room.roomCode] || 0) + 1;
+    }
+
+    if (data.baseAmount !== undefined && Number(data.baseAmount) > 0) {
+      baseAmount = Number(data.baseAmount);
     }
 
     for (const roomCode of Object.keys(requestedCounts)) {
@@ -275,6 +283,7 @@ export class BookingService {
 
       if (!booking) throw new Error('Booking not found');
       if (booking.status !== 'CHECKED_IN') throw new Error(`Booking status is ${booking.status}. Only CHECKED_IN bookings can be checked out.`);
+      if (booking.paymentStatus !== 'PAID') throw new Error('Cannot checkout booking. Payment status is PENDING. Please complete payment before checking out.');
 
       // Smartly find which RoomTypes this booking is associated with
       const bookingRooms = (booking.rooms as any[]) || [];
@@ -320,6 +329,23 @@ export class BookingService {
     }
 
     return updatedBooking;
+  }
+
+  async updatePaymentStatus(id: number, paymentStatus: 'PENDING' | 'PAID', paymentMode: 'CASH' | 'CARD' | 'UPI') {
+    const booking = await prisma.userRoomBooking.findUnique({
+      where: { id }
+    });
+    if (!booking) throw new Error('Booking not found');
+
+    const updated = await prisma.userRoomBooking.update({
+      where: { id },
+      data: {
+        paymentStatus,
+        paymentMode
+      }
+    });
+
+    return updated;
   }
 
   private async releaseEarlyCheckoutInventory(

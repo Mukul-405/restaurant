@@ -19,5 +19,6 @@ router.patch('/:id/extend-checkout', writeLimit(60 * 1000, 60), bookingControlle
 router.patch('/:id/guest-details', writeLimit(60 * 1000, 60), bookingController.updateGuestDetails);
 router.patch('/:id/cancel', writeLimit(60 * 1000, 60), bookingController.cancelBooking);
 router.patch('/:id/edit-rooms', writeLimit(60 * 1000, 60), bookingController.editBookingRooms);
+router.patch('/:id/payment', writeLimit(60 * 1000, 60), bookingController.updatePaymentStatus);
 
 export default router;

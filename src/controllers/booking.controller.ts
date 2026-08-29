@@ -196,6 +196,29 @@ export class BookingController {
     }
   }
 
+  async updatePaymentStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+      const schema = z.object({
+        paymentStatus: z.enum(['PENDING', 'PAID']).default('PAID'),
+        paymentMode: z.enum(['CASH', 'CARD', 'UPI']),
+      });
+      const { paymentStatus, paymentMode } = schema.parse(req.body);
+      const booking = await bookingService.updatePaymentStatus(id, paymentStatus, paymentMode);
+      logger.info({ bookingId: id, paymentStatus, paymentMode }, 'Booking payment status updated');
+      res.status(200).json({ message: 'Payment status updated successfully', booking });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Validation failed', errors: error.issues });
+      }
+      if (error.message && (error.message.includes('not found') || error.message.includes('status'))) {
+        return res.status(400).json({ message: error.message });
+      }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to update booking payment status');
+      next(error);
+    }
+  }
+
 }
 
 export const bookingController = new BookingController();

@@ -188,6 +188,7 @@ model UserRoomBooking {
   commission         Decimal?       @db.Decimal(10,2)
 
   paymentStatus      PaymentStatus
+  paymentMode        PaymentMode?
   payAtHotel         Boolean
 
   status             BookingStatus
