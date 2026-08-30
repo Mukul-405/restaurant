@@ -320,6 +320,7 @@ export interface DayGroupSummary {
   totalBaseAmount: number;
   totalSgstAmount: number;
   totalCgstAmount: number;
+  totalDiscountAmount: number;
   totalAmount: number;
   orders: DailyBillSummaryItem[];
 }
@@ -334,6 +335,7 @@ export interface DailyBillSummaryResult {
   totalBaseAmount: number;
   totalSgstAmount: number;
   totalCgstAmount: number;
+  totalDiscountAmount: number;
   grandTotalAmount: number;
   days: DayGroupSummary[];
   allOrders: DailyBillSummaryItem[];
@@ -372,6 +374,7 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
   let overallTotalBase = 0;
   let overallTotalSgst = 0;
   let overallTotalCgst = 0;
+  let overallTotalDiscount = 0;
   let overallGrandTotal = 0;
   let overallCompleted = 0;
   let overallCancelled = 0;
@@ -393,9 +396,10 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
     base = Number(base.toFixed(2));
 
     const isCancelled = order.status === 'CANCELLED';
+    const discount = isCancelled ? 0 : Number((Number(order.discountAmount || 0)).toFixed(2));
     const sgst = isCancelled ? 0 : Number((base * 0.025).toFixed(2));
     const cgst = isCancelled ? 0 : Number((base * 0.025).toFixed(2));
-    const total = isCancelled ? 0 : Number((base + sgst + cgst).toFixed(2));
+    const total = isCancelled ? 0 : Number(Math.max(0, base + sgst + cgst - discount).toFixed(2));
 
     if (isCancelled) {
       overallCancelled += 1;
@@ -404,6 +408,7 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
       overallTotalBase = Number((overallTotalBase + base).toFixed(2));
       overallTotalSgst = Number((overallTotalSgst + sgst).toFixed(2));
       overallTotalCgst = Number((overallTotalCgst + cgst).toFixed(2));
+      overallTotalDiscount = Number((overallTotalDiscount + discount).toFixed(2));
       overallGrandTotal = Number((overallGrandTotal + total).toFixed(2));
     }
 
@@ -431,7 +436,7 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
       sgstAmount: sgst,
       cgstAmount: cgst,
       totalAmount: total,
-      discountAmount: Number(order.discountAmount || 0),
+      discountAmount: discount,
       finalDiscountedAmount: Number(order.finalDiscountedAmount || 0),
       waiterName: order.user?.name,
       remarks,
@@ -450,6 +455,7 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
         totalBaseAmount: 0,
         totalSgstAmount: 0,
         totalCgstAmount: 0,
+        totalDiscountAmount: 0,
         totalAmount: 0,
         orders: [],
       });
@@ -464,6 +470,7 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
       dayGroup.totalBaseAmount = Number((dayGroup.totalBaseAmount + base).toFixed(2));
       dayGroup.totalSgstAmount = Number((dayGroup.totalSgstAmount + sgst).toFixed(2));
       dayGroup.totalCgstAmount = Number((dayGroup.totalCgstAmount + cgst).toFixed(2));
+      dayGroup.totalDiscountAmount = Number((dayGroup.totalDiscountAmount + discount).toFixed(2));
       dayGroup.totalAmount = Number((dayGroup.totalAmount + total).toFixed(2));
     }
     dayGroup.orders.push(item);
@@ -483,6 +490,7 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
     totalBaseAmount: overallTotalBase,
     totalSgstAmount: overallTotalSgst,
     totalCgstAmount: overallTotalCgst,
+    totalDiscountAmount: overallTotalDiscount,
     grandTotalAmount: overallGrandTotal,
     days: Array.from(dayMap.values()),
     allOrders,
