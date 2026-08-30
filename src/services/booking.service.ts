@@ -273,7 +273,12 @@ export class BookingService {
     });
   }
 
-  async checkOutBooking(id: number, roomDiscountAmount: number = 0, foodDiscountAmount: number = 0) {
+  async checkOutBooking(
+    id: number, 
+    roomDiscountAmount: number = 0, 
+    foodDiscountAmount: number = 0,
+    paymentMode?: 'CASH' | 'CARD' | 'UPI'
+  ) {
     const physicalTotals: Record<string, number> = {};
 
     const updatedBooking = await prisma.$transaction(async (tx) => {
@@ -283,7 +288,6 @@ export class BookingService {
 
       if (!booking) throw new Error('Booking not found');
       if (booking.status !== 'CHECKED_IN') throw new Error(`Booking status is ${booking.status}. Only CHECKED_IN bookings can be checked out.`);
-      if (booking.paymentStatus !== 'PAID') throw new Error('Cannot checkout booking. Payment status is PENDING. Please complete payment before checking out.');
 
       // Smartly find which RoomTypes this booking is associated with
       const bookingRooms = (booking.rooms as any[]) || [];
@@ -310,10 +314,14 @@ export class BookingService {
         }
       }
 
+      const finalPaymentMode = paymentMode || booking.paymentMode || 'CASH';
+
       const updated = await tx.userRoomBooking.update({
         where: { id },
         data: {
           status: 'CHECKED_OUT',
+          paymentStatus: 'PAID',
+          paymentMode: finalPaymentMode as any,
           roomDiscountAmount,
           foodDiscountAmount
         }

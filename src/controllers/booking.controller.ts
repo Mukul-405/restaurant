@@ -109,9 +109,10 @@ export class BookingController {
       const schema = z.object({
         roomDiscountAmount: z.number().nonnegative().optional().default(0),
         foodDiscountAmount: z.number().nonnegative().optional().default(0),
+        paymentMode: z.enum(['CASH', 'CARD', 'UPI']).optional(),
       });
-      const { roomDiscountAmount, foodDiscountAmount } = schema.parse(req.body);
-      const booking = await bookingService.checkOutBooking(id, roomDiscountAmount, foodDiscountAmount);
+      const { roomDiscountAmount, foodDiscountAmount, paymentMode } = schema.parse(req.body);
+      const booking = await bookingService.checkOutBooking(id, roomDiscountAmount, foodDiscountAmount, paymentMode);
       logger.info({ bookingId: id }, 'Booking checked out');
       res.status(200).json({ message: 'Checked out successfully', booking });
     } catch (error: any) {
