@@ -1,16 +1,17 @@
+import { barMenuRepository } from '../repositories/barMenu.repository';
 import { menuRepository } from '../repositories/menu.repository';
-import { barMenuService } from './barMenu.service';
+import { menuService } from './menu.service';
 
-export class MenuService {
-  private cachedMenu: {
+export class BarMenuService {
+  private cachedBarMenu: {
     categories: { id: number; name: string }[];
     items: any[];
   } | null = null;
   private lastFetched: number = 0;
-  private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours TTL (auto-invalidated on any write)
+  private readonly CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours TTL (auto-invalidated on write)
 
   public invalidateCache() {
-    this.cachedMenu = null;
+    this.cachedBarMenu = null;
     this.lastFetched = 0;
   }
 
@@ -20,14 +21,14 @@ export class MenuService {
     }
     await menuRepository.createManyCategories(categories);
     this.invalidateCache();
-    barMenuService.invalidateCache();
+    menuService.invalidateCache();
     return { message: 'Categories created successfully' };
   }
 
-  async createMenuItem(data: { name: string; price: number; description?: string; categoryName: string }) {
+  async createBarMenuItem(data: { name: string; price: number; description?: string; categoryName: string }) {
     const category = await menuRepository.upsertCategory(data.categoryName);
 
-    const menuItem = await menuRepository.createMenuItem({
+    const barMenuItem = await barMenuRepository.createBarMenuItem({
       name: data.name,
       price: data.price,
       description: data.description,
@@ -37,23 +38,23 @@ export class MenuService {
     this.invalidateCache();
 
     return {
-      id: menuItem.id,
-      name: menuItem.name,
-      description: menuItem.description,
-      price: menuItem.price,
-      isAvailable: menuItem.isAvailable,
-      categoryName: menuItem.category.name,
+      id: barMenuItem.id,
+      name: barMenuItem.name,
+      description: barMenuItem.description,
+      price: barMenuItem.price,
+      isAvailable: barMenuItem.isAvailable,
+      categoryName: barMenuItem.category.name,
     };
   }
 
-  async getAllMenuItems() {
+  async getAllBarMenuItems() {
     const now = Date.now();
-    if (this.cachedMenu && now - this.lastFetched < this.CACHE_TTL_MS) {
-      return this.cachedMenu;
+    if (this.cachedBarMenu && now - this.lastFetched < this.CACHE_TTL_MS) {
+      return this.cachedBarMenu;
     }
 
     const categories = await menuRepository.getAllCategories();
-    const items = await menuRepository.getAllMenuItems();
+    const items = await barMenuRepository.getAllBarMenuItems();
     
     const mappedItems = items.map((item: any) => ({
       id: item.id,
@@ -64,16 +65,16 @@ export class MenuService {
       categoryName: item.category.name,
     }));
 
-    this.cachedMenu = {
+    this.cachedBarMenu = {
       categories: categories.map((cat: any) => ({ id: cat.id, name: cat.name })),
       items: mappedItems,
     };
     this.lastFetched = now;
 
-    return this.cachedMenu;
+    return this.cachedBarMenu;
   }
 
-  async updateMenuItem(id: number, data: { name?: string; price?: number; description?: string; isAvailable?: boolean; categoryName?: string }) {
+  async updateBarMenuItem(id: number, data: { name?: string; price?: number; description?: string; isAvailable?: boolean; categoryName?: string }) {
     const updateData: any = {};
     
     if (data.name !== undefined) updateData.name = data.name;
@@ -81,13 +82,12 @@ export class MenuService {
     if (data.description !== undefined) updateData.description = data.description;
     if (data.isAvailable !== undefined) updateData.isAvailable = data.isAvailable;
 
-    // If categoryName is provided, find or create the category and link it
     if (data.categoryName) {
       const category = await menuRepository.upsertCategory(data.categoryName);
       updateData.categoryId = category.id;
     }
 
-    const updatedItem = await menuRepository.updateMenuItem(id, updateData);
+    const updatedItem = await barMenuRepository.updateBarMenuItem(id, updateData);
     
     this.invalidateCache();
 
@@ -101,11 +101,11 @@ export class MenuService {
     };
   }
 
-  async deleteMenuItem(id: number) {
-    const result = await menuRepository.deleteMenuItem(id);
+  async deleteBarMenuItem(id: number) {
+    const result = await barMenuRepository.deleteBarMenuItem(id);
     this.invalidateCache();
     return result;
   }
 }
 
-export const menuService = new MenuService();
+export const barMenuService = new BarMenuService();

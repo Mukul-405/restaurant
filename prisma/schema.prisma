@@ -22,6 +22,8 @@ enum Role {
 enum Permission {
   MANAGE_MEMBERS      // Members
   MANAGE_MENU         // Menu
+  MANAGE_BAR_MENU     // Bar Menu
+  MANAGE_INVENTORY    // Inventory
   VIEW_ANALYSIS       // Analysis
   PRINT_KOTS          // Print KOTs
   MANAGE_ROOMS        // Manage Rooms
@@ -64,10 +66,24 @@ model Category {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  menuItems MenuItem[]
+  menuItems    MenuItem[]
+  barMenuItems BarMenuItem[]
 }
 
 model MenuItem {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  categoryId  Int
+  category    Category @relation(fields: [categoryId], references: [id])
+}
+
+model BarMenuItem {
   id          Int      @id @default(autoincrement())
   name        String
   description String?
@@ -208,4 +224,16 @@ model UserRoomBooking {
   @@index([guestPhone])
   @@index([status, checkOut])
   @@index([status, checkIn])
+}
+
+model Inventory {
+  id         Int      @id @default(autoincrement())
+  date       DateTime
+  metaInfo   Json     // Array of items: [{ name: string, quantity: number, perItemPrice: number, totalPrice: number }]
+  totalPrice Decimal  @db.Decimal(10, 2)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([date(sort: Desc)])
 }
