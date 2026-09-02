@@ -3,7 +3,7 @@ import { OrderStatus, PaymentMode, Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 
 interface OrderItem {
-  menuItemId: number;
+  menuItemId?: number | null;
   quantity: number;
   name: string;
   price: number;
@@ -28,7 +28,7 @@ export class OrderService {
     const prismaItems = data.items as unknown as Prisma.InputJsonValue;
 
     const initialKotHistory = data.items.map(i => ({
-      menuItemId: i.menuItemId,
+      menuItemId: i.menuItemId ?? 0,
       name: i.name,
       qty: i.quantity
     }));
@@ -98,37 +98,41 @@ export class OrderService {
     if (data.items) {
       updateData.items = data.items as unknown as Prisma.InputJsonValue;
 
+      const getItemKey = (i: any) => (i.menuItemId && i.menuItemId !== 0 ? `id_${i.menuItemId}` : `custom_${i.name}`);
+
       const existingItemsMap = new Map();
       const existingItems: any[] = Array.isArray(existingOrder.items) ? existingOrder.items : [];
-      existingItems.forEach((i: any) => existingItemsMap.set(i.menuItemId, i.quantity));
+      existingItems.forEach((i: any) => existingItemsMap.set(getItemKey(i), { qty: i.quantity, menuItemId: i.menuItemId, name: i.name }));
 
       let kotChanged = false;
 
       data.items.forEach(item => {
-        const existingQty = existingItemsMap.get(item.menuItemId) || 0;
+        const key = getItemKey(item);
+        const existingRecord = existingItemsMap.get(key);
+        const existingQty = existingRecord ? existingRecord.qty : 0;
         const diff = item.quantity - existingQty;
 
         if (diff !== 0) {
           kotChanged = true;
-          const existingKotItem = currentKotHistory.find((k: any) => k.menuItemId === item.menuItemId);
+          const existingKotItem = currentKotHistory.find((k: any) => getItemKey(k) === key);
           if (existingKotItem) {
             existingKotItem.qty += diff;
           } else if (diff > 0) {
             currentKotHistory.push({
-              menuItemId: item.menuItemId,
+              menuItemId: item.menuItemId ?? 0,
               name: item.name,
               qty: diff
             });
           }
         }
-        existingItemsMap.delete(item.menuItemId);
+        existingItemsMap.delete(key);
       });
 
-      existingItemsMap.forEach((qty, menuItemId) => {
-        const existingKotItem = currentKotHistory.find((k: any) => k.menuItemId === menuItemId);
+      existingItemsMap.forEach((val, key) => {
+        const existingKotItem = currentKotHistory.find((k: any) => getItemKey(k) === key);
         if (existingKotItem) {
           kotChanged = true;
-          existingKotItem.qty -= qty;
+          existingKotItem.qty -= val.qty;
         }
       });
 

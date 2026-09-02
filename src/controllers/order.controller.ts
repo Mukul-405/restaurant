@@ -6,7 +6,7 @@ import { OrderStatus } from '@prisma/client';
 import { logger } from '../config/logger';
 
 const orderItemSchema = z.object({
-  menuItemId: z.number().int().positive(),
+  menuItemId: z.number().int().optional().nullable().default(0),
   quantity: z.number().int().positive(),
   name: z.string().trim().min(1).max(200),
   price: z.number().min(0),
@@ -19,7 +19,7 @@ const createOrderSchema = z.object({
   discountAmount: z.number().min(0).default(0),
   finalDiscountedAmount: z.number().min(0),
   tableNumber: z.number().int().positive().optional(),
-  kotHistory: z.array(z.object({ menuItemId: z.number(), name: z.string().trim(), qty: z.number() })).max(500).optional(),
+  kotHistory: z.array(z.object({ menuItemId: z.number().optional().nullable(), name: z.string().trim(), qty: z.number() })).max(500).optional(),
 });
 
 const updateOrderSchema = z.object({
@@ -32,7 +32,7 @@ const updateOrderSchema = z.object({
   discountAmount: z.number().min(0).optional(),
   finalDiscountedAmount: z.number().min(0).optional(),
   tableNumber: z.number().int().positive().optional(),
-  kotHistory: z.array(z.object({ menuItemId: z.number(), name: z.string().trim(), qty: z.number() })).max(500).optional(),
+  kotHistory: z.array(z.object({ menuItemId: z.number().optional().nullable(), name: z.string().trim(), qty: z.number() })).max(500).optional(),
 });
 
 const searchOrderSchema = z.object({
