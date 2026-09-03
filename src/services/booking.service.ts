@@ -685,13 +685,79 @@ export class BookingService {
       const extraTaxAmount = Number((extraBaseAmount * 0.05).toFixed(2));
       const extraTotalAmount = Number((extraBaseAmount + extraTaxAmount).toFixed(2));
 
+      // Update webhookPayload with extended room prices
+      let updatedWebhookPayload: any = booking.webhookPayload 
+        ? JSON.parse(JSON.stringify(booking.webhookPayload)) 
+        : { action: 'book', channel: booking.channel || 'Sunrise Resorts', rooms: [] };
+
+      if (!Array.isArray(updatedWebhookPayload.rooms)) {
+        updatedWebhookPayload.rooms = [];
+      }
+
+      bookingRooms.forEach((room: any, rIdx: number) => {
+        let webhookRoom = updatedWebhookPayload.rooms[rIdx];
+        if (!webhookRoom) {
+          webhookRoom = {
+            roomCode: room.roomCode || 'Standard',
+            rateplanCode: room.rateplanCode || '',
+            prices: []
+          };
+          updatedWebhookPayload.rooms[rIdx] = webhookRoom;
+        }
+
+        if (!Array.isArray(webhookRoom.prices)) {
+          webhookRoom.prices = [];
+        }
+
+        // Determine daily price for this room
+        let roomDailyPrice = 0;
+        if (room.price !== undefined && room.price !== null && Number(room.price) > 0) {
+          roomDailyPrice = Number(room.price);
+        } else {
+          const roomType = roomTypeMap[room.roomCode];
+          if (roomType && roomType.rateplanCodes) {
+            const ratePlans = roomType.rateplanCodes as any[];
+            const plan = ratePlans.find((rp: any) => rp.code === room.rateplanCode);
+            if (plan && Number(plan.price) > 0) {
+              roomDailyPrice = Number(plan.price);
+            }
+          }
+        }
+
+        // Fallback to last existing price in webhookRoom.prices
+        if (roomDailyPrice === 0 && webhookRoom.prices.length > 0) {
+          roomDailyPrice = Number(webhookRoom.prices[webhookRoom.prices.length - 1].sellRate) || 0;
+        }
+
+        // Append the extra night rates
+        for (let i = 0; i < extraNights; i++) {
+          const nightDate = new Date(oldDate.getTime() + i * 24 * 60 * 60 * 1000);
+          const dateStr = toYMD_IST(nightDate);
+
+          const existingPriceIdx = webhookRoom.prices.findIndex((p: any) => p.date === dateStr);
+          if (existingPriceIdx >= 0) {
+            webhookRoom.prices[existingPriceIdx].sellRate = roomDailyPrice;
+          } else {
+            webhookRoom.prices.push({
+              date: dateStr,
+              sellRate: roomDailyPrice
+            });
+          }
+        }
+      });
+
+      if (updatedWebhookPayload.checkout) {
+        updatedWebhookPayload.checkout = toYMD_IST(newCheckOutDateObj);
+      }
+
       // Update booking
       const updatedBooking = await tx.userRoomBooking.update({
         where: { id },
         data: {
           checkOut: newCheckOutDateObj,
           totalAmount: { increment: extraTotalAmount },
-          taxAmount: { increment: extraTaxAmount }
+          taxAmount: { increment: extraTaxAmount },
+          webhookPayload: updatedWebhookPayload
         }
       });
 
