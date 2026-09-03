@@ -220,6 +220,28 @@ export class BookingController {
     }
   }
 
+  async updateRoomDailyPrices(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = z.coerce.number().int().positive().parse(req.params.id);
+      const { rooms } = req.body;
+      if (!rooms || !Array.isArray(rooms)) {
+        return res.status(400).json({ message: 'Rooms array is required' });
+      }
+      const booking = await bookingService.updateRoomDailyPrices(id, rooms);
+      logger.info({ bookingId: id }, 'Booking room daily prices updated');
+      res.status(200).json({ message: 'Room daily prices updated successfully', booking });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: 'Validation failed', errors: error.issues });
+      }
+      if (error.message && (error.message.includes('not found') || error.message.includes('status') || error.message.includes('paid') || error.message.includes('Cannot'))) {
+        return res.status(400).json({ message: error.message });
+      }
+      logger.error({ err: error, bookingId: req.params.id }, 'Failed to update room daily prices');
+      next(error);
+    }
+  }
+
 }
 
 export const bookingController = new BookingController();

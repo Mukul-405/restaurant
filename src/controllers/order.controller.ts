@@ -45,11 +45,6 @@ const searchOrderSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
-const kotQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-});
-
 export class OrderController {
   async createOrder(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -97,17 +92,6 @@ export class OrderController {
       res.status(200).json(result);
     } catch (error) {
       logger.error({ err: error }, 'Failed to search orders');
-      next(error);
-    }
-  }
-
-  async getKots(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const query = kotQuerySchema.parse(req.query);
-      const result = await orderService.getKots(query);
-      res.status(200).json(result);
-    } catch (error) {
-      logger.error({ err: error }, 'Failed to get KOTs');
       next(error);
     }
   }

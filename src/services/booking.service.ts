@@ -54,6 +54,14 @@ export class BookingService {
     });
     const roomTypeMap = Object.fromEntries(roomTypes.map(rt => [rt.roomCode, rt]));
 
+    const dateStrings: string[] = [];
+    for (let i = 0; i < nights; i++) {
+      const d = new Date(checkInDate.getTime() + i * 24 * 60 * 60 * 1000);
+      dateStrings.push(d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' }));
+    }
+    
+    const webhookRooms: any[] = [];
+
     // First pass: Calculate amounts, validate room availability
     const requestedCounts: Record<string, number> = {};
     for (const room of data.rooms) {
@@ -71,6 +79,20 @@ export class BookingService {
 
       baseAmount += roomDailyPrice * nights;
       requestedCounts[room.roomCode] = (requestedCounts[room.roomCode] || 0) + 1;
+
+      webhookRooms.push({
+        roomCode: room.roomCode,
+        rateplanCode: room.rateplanCode,
+        guestName: data.guestName,
+        occupancy: {
+          adults: room.adults || 1,
+          children: room.children || 0
+        },
+        prices: dateStrings.map(d => ({
+          date: d,
+          sellRate: roomDailyPrice
+        }))
+      });
     }
 
     if (data.baseAmount !== undefined && Number(data.baseAmount) > 0) {
@@ -86,6 +108,12 @@ export class BookingService {
 
     const taxAmount = Number((baseAmount * 0.05).toFixed(2));
     const totalAmount = Number((baseAmount + taxAmount).toFixed(2));
+
+    const webhookPayload = {
+      action: "book",
+      channel: "Sunrise Resorts",
+      rooms: webhookRooms
+    };
 
     // Second pass: Create Booking and nested BookingRooms.
     // bookingId collides at random (48 bits, not zero); on that one-in-a-
@@ -110,7 +138,8 @@ export class BookingService {
             totalAmount: totalAmount,
             taxAmount: taxAmount,
             bookedOn: new Date(),
-            rooms: data.rooms
+            rooms: data.rooms,
+            webhookPayload: webhookPayload
           }
         });
         break;
@@ -692,6 +721,82 @@ export class BookingService {
     });
 
     return updated;
+  }
+
+  async updateRoomDailyPrices(id: number, roomsData: Array<{ roomIndex?: number; roomCode?: string; prices: Array<{ date: string; sellRate: number | string }> }>) {
+    const booking = await prisma.userRoomBooking.findUnique({
+      where: { id }
+    });
+
+    if (!booking) {
+      throw new Error(`Booking with ID ${id} not found`);
+    }
+
+    if (booking.status !== 'RESERVED' && booking.status !== 'CHECKED_IN') {
+      throw new Error(`Cannot edit prices for ${booking.status.replace('_', ' ').toLowerCase()} bookings. Only Reserved or Checked-in bookings can be edited.`);
+    }
+
+    if (booking.paymentStatus === 'PAID') {
+      throw new Error('Cannot edit prices for an already paid booking');
+    }
+
+    // Calculate new base amount from all nightly rates across all rooms
+    let newBaseAmount = 0;
+    const cleanedRoomsData = roomsData.map((r, idx) => {
+      const prices = (r.prices || []).map((p: any) => {
+        const rate = Math.max(0, Number(p.sellRate) || 0);
+        newBaseAmount += rate;
+        return {
+          date: String(p.date),
+          sellRate: rate
+        };
+      });
+
+      return {
+        ...r,
+        roomIndex: r.roomIndex !== undefined ? r.roomIndex : idx,
+        prices
+      };
+    });
+
+    const newTaxAmount = Number((newBaseAmount * 0.05).toFixed(2));
+    const newTotalAmount = Number((newBaseAmount + newTaxAmount).toFixed(2));
+
+    // Update webhookPayload
+    let updatedWebhookPayload: any = booking.webhookPayload 
+      ? JSON.parse(JSON.stringify(booking.webhookPayload)) 
+      : { action: 'book', channel: booking.channel || 'Sunrise Resorts', rooms: [] };
+
+    if (!Array.isArray(updatedWebhookPayload.rooms)) {
+      updatedWebhookPayload.rooms = [];
+    }
+
+    // Sync webhookPayload.rooms with new prices
+    cleanedRoomsData.forEach((cr, idx) => {
+      const targetIdx = cr.roomIndex !== undefined ? cr.roomIndex : idx;
+      if (updatedWebhookPayload.rooms[targetIdx]) {
+        updatedWebhookPayload.rooms[targetIdx].prices = cr.prices;
+        if (cr.roomCode && !updatedWebhookPayload.rooms[targetIdx].roomCode) {
+          updatedWebhookPayload.rooms[targetIdx].roomCode = cr.roomCode;
+        }
+      } else {
+        updatedWebhookPayload.rooms[targetIdx] = {
+          roomCode: cr.roomCode || 'Standard',
+          prices: cr.prices
+        };
+      }
+    });
+
+    const updatedBooking = await prisma.userRoomBooking.update({
+      where: { id },
+      data: {
+        totalAmount: newTotalAmount,
+        taxAmount: newTaxAmount,
+        webhookPayload: updatedWebhookPayload
+      }
+    });
+
+    return updatedBooking;
   }
 }
 

@@ -11,9 +11,6 @@ router.use(authenticate);
 // Peak season: one waiter can legitimately fire many orders/updates per minute.
 router.post('/', requirePermission(Permission.MANAGE_ORDERS), writeLimit(60 * 1000, 60), orderController.createOrder);
 router.get('/', requirePermission(Permission.MANAGE_ORDERS), readLimit(60 * 1000, 120), orderController.searchOrders);
-
-// Must stay above '/:id', otherwise 'kots' is parsed as an order id.
-router.get('/kots', requirePermission(Permission.PRINT_KOTS), readLimit(), orderController.getKots);
 router.get('/:id', requirePermission(Permission.MANAGE_ORDERS), readLimit(60 * 1000, 120), orderController.getOrderById);
 router.post('/:id/transfer-to-room', requirePermission(Permission.MANAGE_ORDERS), writeLimit(60 * 1000, 60), orderController.transferToRoom);
 router.put('/:id', requirePermission(Permission.MANAGE_ORDERS), writeLimit(60 * 1000, 60), orderController.updateOrder);

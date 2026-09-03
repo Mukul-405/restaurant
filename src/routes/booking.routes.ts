@@ -20,5 +20,6 @@ router.patch('/:id/guest-details', writeLimit(60 * 1000, 60), bookingController.
 router.patch('/:id/cancel', writeLimit(60 * 1000, 60), bookingController.cancelBooking);
 router.patch('/:id/edit-rooms', writeLimit(60 * 1000, 60), bookingController.editBookingRooms);
 router.patch('/:id/payment', writeLimit(60 * 1000, 60), bookingController.updatePaymentStatus);
+router.patch('/:id/daily-prices', writeLimit(60 * 1000, 60), bookingController.updateRoomDailyPrices);
 
 export default router;

@@ -70,41 +70,6 @@ export class OrderRepository {
 
     return { total, data };
   }
-
-  async findKots(query: { page: number; limit: number }) {
-    // kotHistory defaults to '[]' and is emptied on print, so a non-empty
-    // array is exactly "has unprinted items".
-    const where: Prisma.OrderWhereInput = {
-      status: OrderStatus.PENDING,
-      kotHistory: { not: [] },
-    };
-
-    const skip = (query.page - 1) * query.limit;
-
-    // ponytail: (status, createdAt DESC) is scanned backwards for ASC, and the
-    // kotHistory check runs on the already-narrow PENDING set. Add a partial
-    // index on (createdAt) WHERE status='PENDING' only if PENDING ever gets big.
-    const [total, data] = await prisma.$transaction([
-      prisma.order.count({ where }),
-      prisma.order.findMany({
-        where,
-        // Oldest first. The kitchen works the queue front-to-back, and a page
-        // cap must never hide the tickets that have waited longest.
-        orderBy: { createdAt: 'asc' },
-        skip,
-        take: query.limit,
-        select: {
-          id: true,
-          tableNumber: true,
-          kotHistory: true,
-          createdAt: true,
-          user: { select: { id: true, name: true } },
-        },
-      })
-    ]);
-
-    return { total, data };
-  }
 }
 
 export const orderRepository = new OrderRepository();
