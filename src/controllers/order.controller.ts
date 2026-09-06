@@ -24,7 +24,7 @@ const createOrderSchema = z.object({
 
 const updateOrderSchema = z.object({
   status: z.enum(['PENDING', 'COMPLETED', 'CANCELLED']).optional(),
-  paymentMode: z.enum(['CASH', 'CARD', 'UPI']).optional(),
+  paymentMode: z.enum(['CASH', 'CARD', 'UPI', 'ROOM_TRANSFER']).optional(),
   cancellationReason: z.string().trim().max(500).optional(),
   items: z.array(orderItemSchema).min(1).max(100).optional(),
   baseAmount: z.number().min(0).optional(),
