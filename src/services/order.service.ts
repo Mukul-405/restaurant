@@ -235,6 +235,149 @@ export class OrderService {
       return { message: 'Order successfully transferred to room' };
     });
   }
+
+  async mergeOrders(data: {
+    orderIds?: number[];
+    tableNumbers?: number[];
+    targetTableNumber: number;
+    userId: string;
+  }) {
+    return prisma.$transaction(async (tx) => {
+      let ordersToMerge: any[] = [];
+
+      if (data.orderIds && data.orderIds.length > 0) {
+        ordersToMerge = await tx.order.findMany({
+          where: {
+            id: { in: data.orderIds },
+          },
+          include: {
+            user: { select: { id: true, name: true } },
+          },
+        });
+
+        if (ordersToMerge.length !== data.orderIds.length) {
+          throw new Error('One or more selected orders could not be found');
+        }
+      } else if (data.tableNumbers && data.tableNumbers.length > 0) {
+        ordersToMerge = await tx.order.findMany({
+          where: {
+            tableNumber: { in: data.tableNumbers },
+            status: OrderStatus.PENDING,
+          },
+          include: {
+            user: { select: { id: true, name: true } },
+          },
+        });
+      }
+
+      if (ordersToMerge.length < 2) {
+        throw new Error('At least 2 pending orders are required to perform a merge');
+      }
+
+      // Check that all orders are PENDING and have non-null tableNumber
+      for (const order of ordersToMerge) {
+        if (order.status !== OrderStatus.PENDING) {
+          throw new Error(`Order #${order.id} is not pending (status: ${order.status}) and cannot be merged`);
+        }
+        if (order.tableNumber === null || order.tableNumber === undefined) {
+          throw new Error(`Order #${order.id} has no table number and cannot be merged`);
+        }
+      }
+
+      const orderIdsToMerge = ordersToMerge.map(o => o.id);
+
+      // Merge items
+      const itemsMap = new Map<string, { menuItemId: number; name: string; price: number; quantity: number }>();
+
+      for (const order of ordersToMerge) {
+        const orderItems: any[] = Array.isArray(order.items) ? order.items : [];
+        for (const item of orderItems) {
+          const qty = Number(item.quantity || 0);
+          if (qty <= 0) continue;
+          const price = Number(item.price || 0);
+          const menuItemId = item.menuItemId ? Number(item.menuItemId) : 0;
+          const name = String(item.name || '').trim();
+
+          const key = menuItemId > 0 
+            ? `menu_${menuItemId}` 
+            : `custom_${name.toLowerCase()}_${price}`;
+
+          if (itemsMap.has(key)) {
+            itemsMap.get(key)!.quantity += qty;
+          } else {
+            itemsMap.set(key, {
+              menuItemId,
+              name,
+              price,
+              quantity: qty,
+            });
+          }
+        }
+      }
+
+      const mergedItems = Array.from(itemsMap.values());
+      if (mergedItems.length === 0) {
+        throw new Error('Merged orders contain no valid items');
+      }
+
+      // Calculate amounts
+      const baseAmount = Number(mergedItems.reduce((sum, item) => sum + (item.price * item.quantity), 0).toFixed(2));
+      const gstAmount = Number((baseAmount * 0.05).toFixed(2));
+      const totalDiscount = ordersToMerge.reduce((sum, o) => sum + Number(o.discountAmount || 0), 0);
+      const finalDiscountedAmount = Math.max(0, Math.round(baseAmount + gstAmount - totalDiscount));
+
+      // Merge KOT history
+      const kotMap = new Map<string, { menuItemId: number; name: string; qty: number }>();
+      for (const order of ordersToMerge) {
+        const kots: any[] = Array.isArray(order.kotHistory) ? order.kotHistory : [];
+        for (const k of kots) {
+          const qty = Number(k.qty ?? k.quantity ?? 0);
+          if (qty > 0) {
+            const menuItemId = k.menuItemId ? Number(k.menuItemId) : 0;
+            const name = String(k.name || '').trim();
+            const key = menuItemId > 0 ? `menu_${menuItemId}` : `custom_${name.toLowerCase()}`;
+            if (kotMap.has(key)) {
+              kotMap.get(key)!.qty += qty;
+            } else {
+              kotMap.set(key, { menuItemId, name, qty });
+            }
+          }
+        }
+      }
+      const mergedKotHistory = Array.from(kotMap.values());
+
+      // Create new merged order
+      const newOrder = await tx.order.create({
+        data: {
+          items: mergedItems as unknown as Prisma.InputJsonValue,
+          baseAmount,
+          gstAmount,
+          discountAmount: totalDiscount,
+          finalDiscountedAmount,
+          tableNumber: data.targetTableNumber,
+          status: OrderStatus.PENDING,
+          userId: data.userId,
+          kotHistory: mergedKotHistory as unknown as Prisma.InputJsonValue,
+        },
+        include: {
+          user: { select: { id: true, name: true } },
+        },
+      });
+
+      // Delete the old merged orders
+      await tx.order.deleteMany({
+        where: {
+          id: { in: orderIdsToMerge },
+        },
+      });
+
+      return {
+        order: newOrder,
+        mergedOrderIds: orderIdsToMerge,
+        targetTableNumber: data.targetTableNumber,
+      };
+    });
+  }
 }
 
 export const orderService = new OrderService();

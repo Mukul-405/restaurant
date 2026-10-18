@@ -10,6 +10,7 @@ router.use(authenticate);
 
 // Peak season: one waiter can legitimately fire many orders/updates per minute.
 router.post('/', requirePermission(Permission.MANAGE_ORDERS), writeLimit(60 * 1000, 60), orderController.createOrder);
+router.post('/merge', requirePermission(Permission.MANAGE_ORDERS), writeLimit(60 * 1000, 60), orderController.mergeOrders);
 router.get('/', requirePermission(Permission.MANAGE_ORDERS), readLimit(60 * 1000, 120), orderController.searchOrders);
 router.get('/:id', requirePermission(Permission.MANAGE_ORDERS), readLimit(60 * 1000, 120), orderController.getOrderById);
 router.post('/:id/transfer-to-room', requirePermission(Permission.MANAGE_ORDERS), writeLimit(60 * 1000, 60), orderController.transferToRoom);

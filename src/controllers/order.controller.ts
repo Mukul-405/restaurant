@@ -45,6 +45,14 @@ const searchOrderSchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
 });
 
+const mergeOrdersSchema = z.object({
+  orderIds: z.array(z.number().int().positive()).optional(),
+  tableNumbers: z.array(z.number().int().positive()).optional(),
+  targetTableNumber: z.number().int().positive('Target table number must be a positive integer'),
+}).refine(data => (data.orderIds && data.orderIds.length >= 2) || (data.tableNumbers && data.tableNumbers.length >= 2), {
+  message: 'Must provide at least 2 orders or at least 2 tables to merge',
+});
+
 export class OrderController {
   async createOrder(req: AuthRequest, res: Response, next: NextFunction) {
     try {
@@ -108,6 +116,29 @@ export class OrderController {
       res.status(200).json(result);
     } catch (error) {
       logger.error({ err: error, orderId: req.params.id }, 'Failed to transfer order to room');
+      next(error);
+    }
+  }
+
+  async mergeOrders(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const data = mergeOrdersSchema.parse(req.body);
+      const result = await orderService.mergeOrders({
+        ...data,
+        userId: req.user!.id,
+      });
+      logger.info(
+        {
+          newOrderId: result.order.id,
+          mergedOrderIds: result.mergedOrderIds,
+          targetTableNumber: result.targetTableNumber,
+          userId: req.user!.id,
+        },
+        'Orders merged successfully'
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      logger.error({ err: error, body: req.body, userId: req.user?.id }, 'Failed to merge orders');
       next(error);
     }
   }
