@@ -205,11 +205,18 @@ export class BookingService {
       };
     }
 
+    let orderBy: Prisma.UserRoomBookingOrderByWithRelationInput = { createdAt: 'desc' };
+    if (status === 'RESERVED') {
+      orderBy = { checkIn: 'asc' };
+    } else if (status === 'CHECKED_IN') {
+      orderBy = { checkOut: 'asc' };
+    }
+
     const [total, data] = await prisma.$transaction([
       prisma.userRoomBooking.count({ where }),
       prisma.userRoomBooking.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip,
         take: limit,
       })

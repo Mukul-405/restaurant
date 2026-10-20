@@ -15,7 +15,7 @@ function parseDateRange(query: any): { start?: Date; end?: Date; error?: string 
   if (start > end) {
     return { error: 'startDate cannot be after endDate' };
   }
-  
+
   const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
   if (end.getTime() - start.getTime() > ONE_YEAR_MS) {
     return { error: 'Date range cannot exceed 1 year. Please select a smaller range.' };

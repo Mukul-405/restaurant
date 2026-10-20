@@ -401,9 +401,9 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
 
     const isCancelled = order.status === 'CANCELLED';
     const discount = isCancelled ? 0 : Number((Number(order.discountAmount || 0)).toFixed(2));
-    
+
     const taxableAmount = isCancelled ? 0 : Number(Math.max(0, base - discount).toFixed(2));
-    
+
     const sgst = isCancelled ? 0 : Number((taxableAmount * 0.025).toFixed(2));
     const cgst = isCancelled ? 0 : Number((taxableAmount * 0.025).toFixed(2));
     const total = isCancelled ? 0 : Number(Math.max(0, taxableAmount + sgst + cgst).toFixed(2));
@@ -420,7 +420,7 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
       overallGrandTotal = Number((overallGrandTotal + total).toFixed(2));
     }
 
-    let remarks = isCancelled 
+    let remarks = isCancelled
       ? (order.cancellationReason ? `Cancelled: ${order.cancellationReason}` : 'Cancelled')
       : (order.paymentMode || 'Paid');
 
