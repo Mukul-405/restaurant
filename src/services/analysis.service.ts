@@ -166,6 +166,135 @@ export const getBookingAnalysisService = async (startDate: Date, endDate: Date) 
   };
 };
 
+
+export interface HotelPaymentModeBreakdown {
+  count: number;
+  baseAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  commission: number;
+  roomDiscountAmount: number;
+  tds: number;
+  tcs: number;
+  finalAmount: number;
+}
+
+export interface HotelRevenueAnalysis {
+  totalBookings: number;
+  totalAmount: number;
+  taxAmount: number;
+  baseAmount: number;
+  commission: number;
+  roomDiscountAmount: number;
+  tds: number;
+  tcs: number;
+  finalAmount: number;
+  paymentModes: {
+    CASH: HotelPaymentModeBreakdown;
+    CARD: HotelPaymentModeBreakdown;
+    UPI: HotelPaymentModeBreakdown;
+  };
+}
+
+export const getHotelRevenueAnalysisService = async (startDate: Date, endDate: Date): Promise<HotelRevenueAnalysis> => {
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+
+  const bookings = await prisma.userRoomBooking.findMany({
+    where: {
+      status: 'CHECKED_OUT',
+      checkOut: {
+        gte: start,
+        lte: end,
+      },
+    },
+    select: {
+      id: true,
+      totalAmount: true,
+      taxAmount: true,
+      commission: true,
+      roomDiscountAmount: true,
+      paymentMode: true,
+      webhookPayload: true,
+    },
+  });
+
+  let totalBookings = 0;
+  let totalAmount = 0;
+  let taxAmount = 0;
+  let commission = 0;
+  let roomDiscountAmount = 0;
+  let totalTds = 0;
+  let totalTcs = 0;
+
+  const paymentModes: Record<string, HotelPaymentModeBreakdown> = {
+    CASH: { count: 0, baseAmount: 0, taxAmount: 0, totalAmount: 0, commission: 0, roomDiscountAmount: 0, tds: 0, tcs: 0, finalAmount: 0 },
+    CARD: { count: 0, baseAmount: 0, taxAmount: 0, totalAmount: 0, commission: 0, roomDiscountAmount: 0, tds: 0, tcs: 0, finalAmount: 0 },
+    UPI: { count: 0, baseAmount: 0, taxAmount: 0, totalAmount: 0, commission: 0, roomDiscountAmount: 0, tds: 0, tcs: 0, finalAmount: 0 },
+  };
+
+  bookings.forEach((b) => {
+    totalBookings += 1;
+    const bTotal = Number(b.totalAmount || 0);
+    const bTax = Number(b.taxAmount || 0);
+    const bComm = Number(b.commission || 0);
+    const bDisc = Number(b.roomDiscountAmount || 0);
+
+    let payload: any = b.webhookPayload;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        payload = null;
+      }
+    }
+    const amountObj = payload?.amount || {};
+    const bTcs = Number(amountObj.tcs || 0);
+    const bTds = Number(amountObj.tds || 0);
+
+    const bBase = Number((bTotal - bTax).toFixed(2));
+    const bFinal = Number((bTotal - bComm - bDisc - bTcs - bTds).toFixed(2));
+
+    totalAmount += bTotal;
+    taxAmount += bTax;
+    commission += bComm;
+    roomDiscountAmount += bDisc;
+    totalTcs += bTcs;
+    totalTds += bTds;
+
+    const mode = (b.paymentMode && paymentModes[b.paymentMode]) ? b.paymentMode : 'CASH';
+    const pm = paymentModes[mode];
+    pm.count += 1;
+    pm.totalAmount = Number((pm.totalAmount + bTotal).toFixed(2));
+    pm.taxAmount = Number((pm.taxAmount + bTax).toFixed(2));
+    pm.baseAmount = Number((pm.baseAmount + bBase).toFixed(2));
+    pm.commission = Number((pm.commission + bComm).toFixed(2));
+    pm.roomDiscountAmount = Number((pm.roomDiscountAmount + bDisc).toFixed(2));
+    pm.tcs = Number((pm.tcs + bTcs).toFixed(2));
+    pm.tds = Number((pm.tds + bTds).toFixed(2));
+    pm.finalAmount = Number((pm.finalAmount + bFinal).toFixed(2));
+  });
+
+  const baseAmount = Number((totalAmount - taxAmount).toFixed(2));
+  const finalAmount = Number((totalAmount - commission - roomDiscountAmount - totalTcs - totalTds).toFixed(2));
+
+  return {
+    totalBookings,
+    totalAmount: Number(totalAmount.toFixed(2)),
+    taxAmount: Number(taxAmount.toFixed(2)),
+    baseAmount,
+    commission: Number(commission.toFixed(2)),
+    roomDiscountAmount: Number(roomDiscountAmount.toFixed(2)),
+    tds: Number(totalTds.toFixed(2)),
+    tcs: Number(totalTcs.toFixed(2)),
+    finalAmount,
+    paymentModes: paymentModes as HotelRevenueAnalysis['paymentModes'],
+  };
+};
+
 export const getChannelAnalysisService = async (startDate: Date, endDate: Date) => {
   const start = new Date(startDate);
   start.setHours(0, 0, 0, 0);
@@ -511,3 +640,238 @@ export const getDailyBillSummaryService = async (startDate: Date, endDate: Date)
 
 
 
+
+export interface HotelDailyBillItem {
+  id: number;
+  bookingId: string;
+  guestName: string;
+  guestPhone: string;
+  channel: string;
+  source: string;
+  checkIn: string;
+  checkOut: string;
+  dateStr: string;
+  dateHeaderStr: string;
+  dateKey: string;
+  status: string;
+  paymentMode: string | null;
+  paymentStatus: string;
+  totalAmount: number;
+  taxAmount: number;
+  baseAmount: number;
+  roomDiscountAmount: number;
+  commission: number;
+  tcs: number;
+  tds: number;
+  finalAmount: number;
+  roomsCount: number;
+}
+
+export interface HotelDayGroupSummary {
+  dateStr: string;
+  dateHeaderStr: string;
+  dateKey: string;
+  totalBookings: number;
+  checkedOutBookings: number;
+  cancelledBookings: number;
+  totalBaseAmount: number;
+  totalTaxAmount: number;
+  totalAmount: number;
+  totalDiscountAmount: number;
+  totalCommission: number;
+  totalTcs: number;
+  totalTds: number;
+  totalFinalAmount: number;
+  bookings: HotelDailyBillItem[];
+}
+
+export interface HotelDailyBillSummaryResult {
+  startDate: string;
+  endDate: string;
+  monthTitle: string;
+  totalBookings: number;
+  checkedOutBookings: number;
+  cancelledBookings: number;
+  totalBaseAmount: number;
+  totalTaxAmount: number;
+  totalAmount: number;
+  totalDiscountAmount: number;
+  totalCommission: number;
+  totalTcs: number;
+  totalTds: number;
+  grandTotalFinalAmount: number;
+  days: HotelDayGroupSummary[];
+  channels: string[];
+}
+
+export const getHotelDailyBillSummaryService = async (startDate: Date, endDate: Date): Promise<HotelDailyBillSummaryResult> => {
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+
+  const bookings = await prisma.userRoomBooking.findMany({
+    where: {
+      status: 'CHECKED_OUT',
+      checkOut: {
+        gte: start,
+        lte: end,
+      },
+    },
+    orderBy: {
+      checkOut: 'asc',
+    },
+  });
+
+  const dayMap = new Map<string, HotelDayGroupSummary>();
+  const channelSet = new Set<string>();
+
+  let overallTotalBase = 0;
+  let overallTotalTax = 0;
+  let overallTotalAmount = 0;
+  let overallTotalDiscount = 0;
+  let overallTotalCommission = 0;
+  let overallTotalTcs = 0;
+  let overallTotalTds = 0;
+  let overallGrandFinal = 0;
+  let overallCheckedOut = 0;
+  let overallCancelled = 0;
+
+  bookings.forEach((b) => {
+    const outDate = new Date(b.checkOut);
+    const year = outDate.getFullYear();
+    const month = String(outDate.getMonth() + 1).padStart(2, '0');
+    const day = String(outDate.getDate()).padStart(2, '0');
+    const dateKey = `${year}-${month}-${day}`;
+
+    const dateStr = outDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const dateHeaderStr = outDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+
+    let payload: any = b.webhookPayload;
+    if (typeof payload === 'string') {
+      try {
+        payload = JSON.parse(payload);
+      } catch {
+        payload = null;
+      }
+    }
+
+    const amountObj = payload?.amount || {};
+    const channelName = (b.channel || payload?.channel || (b.source === 'DIRECT' ? 'Direct' : 'OTA')).trim();
+    if (channelName) channelSet.add(channelName);
+
+    const isCancelled = b.status === 'CANCELLED';
+    const bTotal = Number(b.totalAmount || 0);
+    const bTax = Number(b.taxAmount || 0);
+    const bBase = Number((bTotal - bTax).toFixed(2));
+    const bDisc = Number(b.roomDiscountAmount || 0);
+    const bComm = Number(b.commission || 0);
+    const bTcs = Number(amountObj.tcs || 0);
+    const bTds = Number(amountObj.tds || 0);
+    const bFinal = isCancelled ? 0 : Number((bTotal - bComm - bDisc - bTcs - bTds).toFixed(2));
+
+    let roomsCount = 1;
+    if (Array.isArray(b.rooms)) {
+      roomsCount = b.rooms.length;
+    }
+
+    const item: HotelDailyBillItem = {
+      id: b.id,
+      bookingId: b.bookingId,
+      guestName: b.guestName || 'Guest',
+      guestPhone: b.guestPhone || '',
+      channel: channelName,
+      source: b.source,
+      checkIn: b.checkIn.toISOString(),
+      checkOut: b.checkOut.toISOString(),
+      dateStr,
+      dateHeaderStr,
+      dateKey,
+      status: b.status,
+      paymentMode: b.paymentMode,
+      paymentStatus: b.paymentStatus,
+      totalAmount: bTotal,
+      taxAmount: bTax,
+      baseAmount: bBase,
+      roomDiscountAmount: bDisc,
+      commission: bComm,
+      tcs: bTcs,
+      tds: bTds,
+      finalAmount: bFinal,
+      roomsCount,
+    };
+
+    if (isCancelled) {
+      overallCancelled += 1;
+    } else {
+      overallCheckedOut += 1;
+      overallTotalBase = Number((overallTotalBase + bBase).toFixed(2));
+      overallTotalTax = Number((overallTotalTax + bTax).toFixed(2));
+      overallTotalAmount = Number((overallTotalAmount + bTotal).toFixed(2));
+      overallTotalDiscount = Number((overallTotalDiscount + bDisc).toFixed(2));
+      overallTotalCommission = Number((overallTotalCommission + bComm).toFixed(2));
+      overallTotalTcs = Number((overallTotalTcs + bTcs).toFixed(2));
+      overallTotalTds = Number((overallTotalTds + bTds).toFixed(2));
+      overallGrandFinal = Number((overallGrandFinal + bFinal).toFixed(2));
+    }
+
+    if (!dayMap.has(dateKey)) {
+      dayMap.set(dateKey, {
+        dateStr,
+        dateHeaderStr,
+        dateKey,
+        totalBookings: 0,
+        checkedOutBookings: 0,
+        cancelledBookings: 0,
+        totalBaseAmount: 0,
+        totalTaxAmount: 0,
+        totalAmount: 0,
+        totalDiscountAmount: 0,
+        totalCommission: 0,
+        totalTcs: 0,
+        totalTds: 0,
+        totalFinalAmount: 0,
+        bookings: [],
+      });
+    }
+
+    const dayGroup = dayMap.get(dateKey)!;
+    dayGroup.totalBookings += 1;
+    if (isCancelled) {
+      dayGroup.cancelledBookings += 1;
+    } else {
+      dayGroup.checkedOutBookings += 1;
+      dayGroup.totalBaseAmount = Number((dayGroup.totalBaseAmount + bBase).toFixed(2));
+      dayGroup.totalTaxAmount = Number((dayGroup.totalTaxAmount + bTax).toFixed(2));
+      dayGroup.totalAmount = Number((dayGroup.totalAmount + bTotal).toFixed(2));
+      dayGroup.totalDiscountAmount = Number((dayGroup.totalDiscountAmount + bDisc).toFixed(2));
+      dayGroup.totalCommission = Number((dayGroup.totalCommission + bComm).toFixed(2));
+      dayGroup.totalTcs = Number((dayGroup.totalTcs + bTcs).toFixed(2));
+      dayGroup.totalTds = Number((dayGroup.totalTds + bTds).toFixed(2));
+      dayGroup.totalFinalAmount = Number((dayGroup.totalFinalAmount + bFinal).toFixed(2));
+    }
+    dayGroup.bookings.push(item);
+  });
+
+  const monthTitle = start.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  return {
+    startDate: start.toISOString(),
+    endDate: end.toISOString(),
+    monthTitle,
+    totalBookings: bookings.length,
+    checkedOutBookings: overallCheckedOut,
+    cancelledBookings: overallCancelled,
+    totalBaseAmount: overallTotalBase,
+    totalTaxAmount: overallTotalTax,
+    totalAmount: overallTotalAmount,
+    totalDiscountAmount: overallTotalDiscount,
+    totalCommission: overallTotalCommission,
+    totalTcs: overallTotalTcs,
+    totalTds: overallTotalTds,
+    grandTotalFinalAmount: overallGrandFinal,
+    days: Array.from(dayMap.values()),
+    channels: Array.from(channelSet),
+  };
+};

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { getRevenueAnalysisService, getWaiterAnalysisService, getBookingAnalysisService, getChannelAnalysisService, getOrderItemAnalysisService, getDailyBillSummaryService } from '../services/analysis.service';
+import { getRevenueAnalysisService, getWaiterAnalysisService, getBookingAnalysisService, getChannelAnalysisService, getOrderItemAnalysisService, getDailyBillSummaryService, getHotelRevenueAnalysisService, getHotelDailyBillSummaryService } from '../services/analysis.service';
 import { logger } from '../config/logger';
 
 function parseDateRange(query: any): { start?: Date; end?: Date; error?: string } {
@@ -103,3 +103,29 @@ export const getDailyBillSummary = async (req: Request, res: Response, next: Nex
 };
 
 
+
+export const getHotelRevenueAnalysis = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { start, end, error } = parseDateRange(req.query);
+    if (error || !start || !end) return res.status(400).json({ error });
+
+    const data = await getHotelRevenueAnalysisService(start, end);
+    res.status(200).json(data);
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to get hotel revenue analysis');
+    next(error);
+  }
+};
+
+export const getHotelDailyBillSummary = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { start, end, error } = parseDateRange(req.query);
+    if (error || !start || !end) return res.status(400).json({ error });
+
+    const data = await getHotelDailyBillSummaryService(start, end);
+    res.status(200).json(data);
+  } catch (error) {
+    logger.error({ err: error }, 'Failed to get hotel daily bill summary');
+    next(error);
+  }
+};
